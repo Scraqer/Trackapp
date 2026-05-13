@@ -1,3 +1,6 @@
+appfinal · HTML
+Copy
+
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -113,10 +116,10 @@ function App() {
   const [editId,           setEditId]           = useState(null);
   const [formStart,        setFormStart]        = useState("");
   const [formDays,         setFormDays]         = useState("28");
-
+ 
   // Statistics sheet
   const [sheetStatsOpen,   setSheetStatsOpen]   = useState(false);
-
+ 
   // Delete confirmation modal
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmId,   setDeleteConfirmId]   = useState(null);
@@ -199,13 +202,13 @@ function App() {
     setPickMode(true);
   };
   const cancelPick = () => { setPickMode(false); setSheetBlisterOpen(true); };
-
+ 
   // ── delete blister ─────────────────────────────────────────────────────
   const deleteBlister = (id) => {
     setDeleteConfirmId(id);
     setDeleteConfirmOpen(true);
   };
-
+ 
   const confirmDelete = () => {
     if (deleteConfirmId) {
       const next = blisters.filter(b => b.id !== deleteConfirmId);
@@ -215,12 +218,12 @@ function App() {
     setDeleteConfirmOpen(false);
     setDeleteConfirmId(null);
   };
-
+ 
   const cancelDelete = () => {
     setDeleteConfirmOpen(false);
     setDeleteConfirmId(null);
   };
-
+ 
   // ── statistics ──────────────────────────────────────────────────────────
   const getMonthStats = (year, month) => {
     const firstDay = new Date(year, month, 1);
@@ -484,7 +487,7 @@ function App() {
           style={{position:"fixed",inset:0,background:"rgba(122,46,64,.22)",
             zIndex:10,backdropFilter:"blur(3px)"}}/>
       )}
-
+ 
       {/* ── Delete Confirmation Modal ──────────────────────────────────── */}
       {deleteConfirmOpen && (
         <>
@@ -685,7 +688,7 @@ function App() {
         )}
  
       </div>
-
+ 
       {/* ══════════════ SHEET: STATYSTYKI ═════════════════════════════════ */}
       <div style={{position:"fixed",bottom:0,left:"50%",
         transform:`translateX(-50%) translateY(${sheetStatsOpen?"0":"105%"})`,
@@ -693,7 +696,7 @@ function App() {
         padding:"14px 22px 52px",zIndex:11,
         transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
         boxShadow:"0 -6px 48px rgba(139,0,139,.12)"}}>
-
+ 
         <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 22px"}}/>
         <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
           marginBottom:24,textTransform:"uppercase",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -704,7 +707,7 @@ function App() {
             ✕
           </button>
         </div>
-
+ 
         {(() => {
           const stats = getMonthStats(yr, mo);
           return (
@@ -726,7 +729,7 @@ function App() {
                   z {stats.totalDays} dni w miesiącu
                 </div>
               </div>
-
+ 
               <div style={{padding:"18px 22px",borderRadius:20,background:"#fff0ff",
                 border:`2px solid #FF5C8A`}}>
                 <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.2,marginBottom:8,textTransform:"uppercase"}}>
@@ -739,7 +742,7 @@ function App() {
                   z {stats.totalDays} dni w miesiącu
                 </div>
               </div>
-
+ 
               <div style={{padding:"18px 22px",borderRadius:20,background:stats.noTabletkaCount===0?"#f0fff4":"#fff0f0",
                 border:`2px solid ${stats.noTabletkaCount===0?"#27ae60":"#FF272A"}`}}>
                 <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.2,marginBottom:8,textTransform:"uppercase"}}>
