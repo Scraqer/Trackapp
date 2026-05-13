@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Trackapp"/>
+<meta name="theme-color" content="#FFE3EC"/>
+<title>Trackapp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; background: #FFE3EC; }
+body { min-height: 100.1vh; background: #FFE3EC; overscroll-behavior-x: none; }
+#root { min-height: 100vh; }
+.day-btn { transition: transform .12s ease; }
+.day-btn:active { transform: scale(.86) !important; }
+.nav-btn { transition: transform .1s ease; }
+.nav-btn:active { transform: scale(.88); }
+.tog-btn { transition: all .22s cubic-bezier(.34,1.2,.64,1); }
+.tog-btn:active { transform: scale(.97) !important; }
+.fab { transition: all .15s ease; }
+.fab:active { transform: translateX(-50%) scale(.93) !important; }
+.list-item { transition: background .15s ease; }
+.list-item:active { background: #FFD6E8 !important; }
+@keyframes sR { from{opacity:0;transform:translateX(32px)} to{opacity:1;transform:translateX(0)} }
+@keyframes sL { from{opacity:0;transform:translateX(-32px)} to{opacity:1;transform:translateX(0)} }
+.anim-r { animation: sR .28s cubic-bezier(.22,1,.36,1) both; }
+.anim-l { animation: sL .28s cubic-bezier(.22,1,.36,1) both; }
+input[type=date], input[type=number] {
+  font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 700;
+  padding: 14px 16px; border: none; border-radius: 16px;
+  background: #FFE3EC; color: #3d1520; width: 100%;
+  outline: none; -webkit-appearance: none; appearance: none;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>window.addEventListener('load',()=>setTimeout(()=>window.scrollTo(0,1),100));</script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useRef } = React;
+ 
+const STORAGE_KEY  = "trackapp-v1";
+const BLISTERS_KEY = "trackapp-blisters-v1";
+ 
+const MONTHS = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec",
+                "Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
+const DAYS   = ["Pn","Wt","Śr","Cz","Pt","Sb","Nd"];
+ 
+const C = {
+  crimson:"#C81D3A", coral:"#FF5C8A",
+  blush:"#FF9FB5",   pale:"#FFE3EC",
+  dark:"#7A2E40",    text:"#3d1520",
+  red:"#FF272A",     freak:"#80009f",
+  error:"#ff0922",
+};
+ 
+// Soft band colours for each blister (cycles if >4)
+const BAND = ["rgba(255,255,255,0.1)","rgba(255,159,181,0.1)","rgba(200,216,255,0.1)","rgba(200,240,224,0.1)"];
+ 
+ 
+// ── helpers ─────────────────────────────────────────────────────────────────
+const ls  = (k,d) => { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):d; } catch{return d;} };
+const lss = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
+const fmtKey = (y,m,d) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+ 
+function shiftDate(key, n) {
+  const [y,m,d] = key.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() + n);
+  return fmtKey(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+const bEnd    = b => shiftDate(b.start, b.days - 1);
+const short   = k => { const [,m,d]=k.split("-").map(Number); return `${d}.${String(m).padStart(2,"0")}`; };
+ 
+function buildCells(y,m) {
+  const first  = new Date(y,m,1).getDay();
+  const offset = (first+6)%7;
+  const total  = new Date(y,m+1,0).getDate();
+  const arr = Array(offset).fill(null);
+  for (let d=1;d<=total;d++) arr.push(d);
+  return arr;
+}
+ 
+// ── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const now      = new Date();
+  const todayKey = fmtKey(now.getFullYear(), now.getMonth(), now.getDate());
+ 
+  // Data
+  const [data,     setData]     = useState(() => ls(STORAGE_KEY, {}));
+  const [blisters, setBlisters] = useState(() => ls(BLISTERS_KEY, []));
+ 
+  // Calendar nav
+  const [yr,      setYr]      = useState(now.getFullYear());
+  const [mo,      setMo]      = useState(now.getMonth());
+  const [slideDir,setSlideDir]= useState(0);
+  const [animKey, setAnimKey] = useState(0);
+ 
+  // Day sheet
+  const [sheetDayOpen,     setSheetDayOpen]     = useState(false);
+  const [selDate,          setSelDate]           = useState(todayKey);
+ 
+  // Blister sheet
+  const [sheetBlisterOpen, setSheetBlisterOpen] = useState(false);
+  const [bMode,            setBMode]            = useState("menu"); // menu|add|modify|edit
+  const [editId,           setEditId]           = useState(null);
+  const [formStart,        setFormStart]        = useState("");
+  const [formDays,         setFormDays]         = useState("28");
+
+  // Statistics sheet
+  const [sheetStatsOpen,   setSheetStatsOpen]   = useState(false);
+
+  // Delete confirmation modal
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmId,   setDeleteConfirmId]   = useState(null);
+ 
+  // Pick-mode: user taps calendar to choose blister start
+  const [pickMode, setPickMode] = useState(false);
+ 
+  const touchX = useRef(null);
+ 
+  // ── tracker toggle ─────────────────────────────────────────────────────────
+  const toggle = field => {
+    const e = {...(data[selDate]||{})};
+    e[field] = !e[field];
+    const next = {...data};
+    if (!e.tabletka && !e.freaky && !e.krwawienie) delete next[selDate];
+    else next[selDate] = e;
+    setData(next);
+    lss(STORAGE_KEY, next);
+  };
+ 
+  // ── calendar nav ───────────────────────────────────────────────────────────
+  const goMonth = dir => {
+    setSlideDir(dir); setAnimKey(k=>k+1);
+    if (dir<0){if(mo===0){setYr(y=>y-1);setMo(11);}else setMo(m=>m-1);}
+    else      {if(mo===11){setYr(y=>y+1);setMo(0);}else setMo(m=>m+1);}
+  };
+  const goToday = () => { setYr(now.getFullYear()); setMo(now.getMonth()); };
+ 
+  // ── day click (aware of pick mode) ────────────────────────────────────────
+  const openDay = key => {
+    if (pickMode) {
+      setFormStart(key);
+      setPickMode(false);
+      setSheetBlisterOpen(true);
+      return;
+    }
+    setSelDate(key);
+    setSheetDayOpen(true);
+  };
+ 
+  // ── blister helpers ────────────────────────────────────────────────────────
+  const pillsIn = b => {
+    const end = bEnd(b);
+    return Object.entries(data).filter(([k,v]) => k>=b.start && k<=end && v.tabletka).length;
+  };
+  const pct = b => Math.min(100, Math.round(pillsIn(b) / b.days * 100));
+ 
+  const dateBI = key => {
+    for (let i=blisters.length-1; i>=0; i--) {
+      const b = blisters[i];
+      if (key >= b.start && key <= bEnd(b))
+        return { idx:i, isFirst:key===b.start, isLast:key===bEnd(b) };
+    }
+    return null;
+  };
+ 
+  const currentBlister = blisters.length ? blisters[blisters.length-1] : null;
+ 
+  // ── blister save ───────────────────────────────────────────────────────────
+  const saveBlister = () => {
+    const d = parseInt(formDays);
+    if (!formStart || isNaN(d) || d < 1) return;
+    let next;
+    if (bMode === "add") {
+      next = [...blisters, { id:Date.now(), start:formStart, days:d }];
+    } else {
+      next = blisters.map(b => b.id===editId ? {...b, start:formStart, days:d} : b);
+    }
+    setBlisters(next);
+    lss(BLISTERS_KEY, next);
+    setBMode("menu");
+    setFormStart(""); setFormDays("28"); setEditId(null);
+  };
+ 
+  const startAdd = () => { setFormStart(""); setFormDays("28"); setBMode("add"); };
+  const startEdit = b => { setEditId(b.id); setFormStart(b.start); setFormDays(String(b.days)); setBMode("edit"); };
+ 
+  const startPickOnCalendar = () => {
+    setSheetBlisterOpen(false);
+    setPickMode(true);
+  };
+  const cancelPick = () => { setPickMode(false); setSheetBlisterOpen(true); };
+
+  // ── delete blister ─────────────────────────────────────────────────────
+  const deleteBlister = (id) => {
+    setDeleteConfirmId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteConfirmId) {
+      const next = blisters.filter(b => b.id !== deleteConfirmId);
+      setBlisters(next);
+      lss(BLISTERS_KEY, next);
+    }
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmId(null);
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmId(null);
+  };
+
+  // ── statistics ──────────────────────────────────────────────────────────
+  const getMonthStats = (year, month) => {
+    const firstDay = new Date(year, month, 1);
+    const lastDay  = new Date(year, month+1, 0);
+    const totalDays = lastDay.getDate();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    let krwawieniaCount = 0;
+    let freakyCount = 0;
+    let noTabletkaCount = 0;
+    let noTabletkaDay = [];
+    
+    for (let d = 1; d <= totalDays; d++) {
+      const key = fmtKey(year, month, d);
+      const dayData = data[key];
+      const currentDate = new Date(year, month, d);
+      
+      if (dayData) {
+        if (dayData.krwawienie) krwawieniaCount++;
+        if (dayData.freaky) freakyCount++;
+        // Only count skipped tablets for previous days
+        if (!dayData.tabletka && currentDate < today) {
+          noTabletkaCount++;
+          noTabletkaDay.push(d);
+        }
+      } else {
+        // Only count skipped tablets for previous days
+        if (currentDate < today) {
+          noTabletkaCount++;
+          noTabletkaDay.push(d);
+        }
+      }
+    }
+    
+    const freakyPct = Math.round((freakyCount / totalDays) * 100);
+    
+    return {
+      krwawieniaCount,
+      freakyCount,
+      freakyPct,
+      noTabletkaCount,
+      noTabletkaDay,
+      totalDays
+    };
+  };
+ 
+  // ── derived ────────────────────────────────────────────────────────────────
+  const cells   = buildCells(yr, mo);
+  const isCurMo = yr===now.getFullYear() && mo===now.getMonth();
+  const selData = data[selDate]||{};
+  const [sdy,sdm,sdd] = selDate.split("-");
+  const selLabel = selDate===todayKey ? "Dzisiaj"
+    : `${parseInt(sdd)} ${MONTHS[parseInt(sdm)-1]} ${sdy}`;
+ 
+  // ── render ─────────────────────────────────────────────────────────────────
+  return (
+    <div
+      style={{fontFamily:"'Nunito',sans-serif",background:C.pale,minHeight:"100vh",
+        maxWidth:430,margin:"0 auto",position:"relative",userSelect:"none",
+        paddingTop:"env(safe-area-inset-top)"}}
+      onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
+      onTouchEnd={e=>{
+        if(touchX.current===null)return;
+        const dx=e.changedTouches[0].clientX-touchX.current;
+        if(Math.abs(dx)>48)goMonth(dx<0?1:-1);
+        touchX.current=null;
+      }}
+    >
+      <div style={{height:52}}/>
+ 
+      {/* ── Pick mode banner ────────────────────────────────────────────── */}
+      {pickMode && (
+        <div style={{position:"sticky",top:0,zIndex:50,background:C.crimson,
+          padding:"13px 18px",display:"flex",alignItems:"center",
+          justifyContent:"space-between",boxShadow:"0 4px 20px rgba(200,29,58,.3)"}}>
+          <span style={{color:"white",fontSize:14,fontWeight:800,letterSpacing:.3}}>
+             Zaznacz dzień początku blistra
+          </span>
+          <button onClick={cancelPick}
+            style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:10,
+              padding:"5px 12px",color:"white",fontWeight:900,cursor:"pointer",fontSize:16}}>
+            ✕
+          </button>
+        </div>
+      )}
+ 
+      {/* ── Month header ────────────────────────────────────────────────── */}
+      <div style={{display:"flex",alignItems:"center",
+        justifyContent:"space-between",padding:"0 20px 18px"}}>
+        <button className="nav-btn" onClick={()=>goMonth(-1)}
+          style={{width:42,height:42,borderRadius:"50%",background:"white",border:"none",
+            cursor:"pointer",fontSize:22,color:C.crimson,display:"flex",
+            alignItems:"center",justifyContent:"center",
+            boxShadow:"0 2px 12px rgba(200,29,58,.12)"}}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:26,fontWeight:900,color:C.crimson,letterSpacing:-0.5}}>{MONTHS[mo]}</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:2}}>
+            <span style={{fontSize:13,fontWeight:600,color:C.dark,opacity:.45}}>{yr}</span>
+            {!isCurMo&&(
+              <button onClick={goToday}
+                style={{fontSize:11,fontWeight:800,color:C.crimson,background:C.pale,
+                  border:"none",borderRadius:8,padding:"2px 8px",cursor:"pointer"}}>DZIŚ</button>
+            )}
+          </div>
+        </div>
+        <button className="nav-btn" onClick={()=>goMonth(1)}
+          style={{width:42,height:42,borderRadius:"50%",background:"white",border:"none",
+            cursor:"pointer",fontSize:22,color:C.crimson,display:"flex",
+            alignItems:"center",justifyContent:"center",
+            boxShadow:"0 2px 12px rgba(200,29,58,.12)"}}>›</button>
+      </div>
+ 
+      {/* ── Calendar card ───────────────────────────────────────────────── */}
+      <div style={{margin:"0 14px",background:"white",borderRadius:28,
+        padding:"18px 0 24px",boxShadow:"0 4px 32px rgba(200,29,58,.07)"}}>
+ 
+        {/* Day labels */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",
+          marginBottom:6,padding:"0 4px"}}>
+          {DAYS.map(d=>(
+            <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:800,
+              color:C.blush,padding:"0 0 8px",letterSpacing:.8}}>{d}</div>
+          ))}
+        </div>
+ 
+        {/* Grid — no column gap for continuous band */}
+        <div key={animKey}
+          className={animKey===0?"":slideDir>=0?"anim-r":"anim-l"}
+          style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"0"}}>
+          {cells.map((day,i)=>{
+            if(!day) return <div key={"e"+i}/>;
+            const key     = fmtKey(yr,mo,day);
+            const isToday = key===todayKey;
+            const isSel   = key===selDate && sheetDayOpen;
+            const dd      = data[key]||{};
+            const bi      = dateBI(key);
+            const col     = i%7;
+ 
+            // Band
+            let bandBg = pickMode ? "#FFF0F8" : "transparent";
+            let bandR  = "0";
+            if (bi) {
+              bandBg = BAND[bi.idx % BAND.length];
+              const lR = bi.isFirst || col===0;
+              const rR = bi.isLast  || col===6;
+              bandR = lR&&rR?"12px":lR?"12px 0 0 12px":rR?"0 12px 12px 0":"0";
+            }
+ 
+            return (
+              <div key={key} style={{background:bandBg,borderRadius:bandR,}}>
+                <button className="day-btn" onClick={()=>openDay(key)}
+                  style={{width:"100%",display:"flex",flexDirection:"column",
+                    alignItems:"center",justifyContent:"center",
+                    padding:"6px 1px",borderRadius:12,border:"none",
+                    outline:isSel&&!isToday?`2px solid ${C.coral}`:"none",
+                    background:isToday?C.crimson:isSel?C.pale:
+                      pickMode&&!bi?"rgba(200,29,58,.05)":"transparent",
+                    cursor:"pointer"}}>
+                  <span style={{fontSize:15,lineHeight:1.2,fontWeight:isToday?900:600,
+                    color:isToday?"white":C.text}}>{day}</span>
+                  <div style={{display:"flex",gap:2,marginTop:2,height:6,alignItems:"center"}}>
+                    {dd.tabletka   && <div style={{width:5,height:5,borderRadius:"50%",background:isToday?"rgba(255,255,255,.85)":C.coral}}/>}
+                    {dd.freaky     && <div style={{width:5,height:5,borderRadius:"50%",background:isToday?"rgba(255,255,255,.65)":C.freak}}/>}
+                    {dd.krwawienie && <div style={{width:5,height:5,borderRadius:"50%",background:isToday?"rgba(255,255,255,.65)":C.red}}/>}
+                  </div>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+ 
+      {/* ── Obecny blister ──────────────────────────────────────────────── */}
+      {currentBlister && (()=>{
+        const p = pct(currentBlister);
+        return (
+          <div style={{margin:"12px 14px 0",background:"white",borderRadius:20,
+            padding:"14px 18px",boxShadow:"0 2px 16px rgba(200,29,58,.06)"}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.blush,letterSpacing:1.6,
+              marginBottom:8,textTransform:"uppercase"}}>Obecny Blister</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:15,fontWeight:800,color:C.text}}>
+                {short(currentBlister.start)} — {short(bEnd(currentBlister))}
+                <span style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,marginLeft:8}}>
+                  ({currentBlister.days} dni)
+                </span>
+              </div>
+              <div style={{fontSize:20,fontWeight:900,
+                color:p>=100?"#27ae60":p>60?C.coral:C.crimson}}>{p}%</div>
+            </div>
+            <div style={{height:7,background:C.pale,borderRadius:4,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${p}%`,borderRadius:4,
+                background:p>=100?"#27ae60":C.coral,transition:"width .5s ease"}}/>
+            </div>
+            {p>=100&&(
+              <div style={{marginTop:8,fontSize:12,fontWeight:700,
+                color:"#27ae60",textAlign:"center"}}>
+                ✅ Blister ukończony! Dodaj nowy w zakładce Blister.
+              </div>
+            )}
+          </div>
+        );
+      })()}
+ 
+      {/* ── Legenda ─────────────────────────────────────────────────────── */}
+      <div style={{display:"flex",gap:14,justifyContent:"center",padding:"16px 0 240px",flexWrap:"wrap"}}>
+        {[
+          {color:C.coral, label:"Tabletka"},
+          {color:C.freak, label:"Freaky"},
+          {color:C.red,   label:"Krwawienie"},
+        ].map(item=>(
+          <div key={item.label} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:10,height:10,borderRadius:3,background:item.color,
+              border:item.border===false? "none" : `1px solid ${C.crimson}`}}/>
+            <span style={{fontSize:12,fontWeight:700,color:C.dark,opacity:.6}}>{item.label}</span>
+            
+          </div>
+        ))}
+      </div>
+ 
+      {/* ── FABs ────────────────────────────────────────────────────────── */}
+      {!sheetBlisterOpen && !pickMode && (
+        <button className="fab" onClick={()=>{setBMode("menu");setSheetBlisterOpen(true);}}
+          style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
+            background:C.coral,border:"none",borderRadius:28,padding:"16px 34px",
+            color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+            boxShadow:"0 8px 28px rgba(255,92,138,.42)",display:"flex",
+            alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
+          <span style={{fontSize:20,lineHeight:1}}>💊</span> Blister
+        </button>
+      )}
+      {!sheetStatsOpen && !pickMode && (
+        <button className="fab" onClick={()=>setSheetStatsOpen(true)}
+          style={{position:"fixed",bottom:90,left:"50%",transform:"translateX(-50%)",
+            background:"#8B008B",border:"none",borderRadius:28,padding:"16px 34px",
+            color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+            boxShadow:"0 8px 28px rgba(139,0,139,.42)",display:"flex",
+            alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
+          <span style={{fontSize:20,lineHeight:1}}>📊</span> Statystyki
+        </button>
+      )}
+      {!sheetDayOpen && !pickMode && (
+        <button className="fab" onClick={()=>{setSelDate(todayKey);setSheetDayOpen(true);}}
+          style={{position:"fixed",bottom:156,left:"50%",transform:"translateX(-50%)",
+            background:C.crimson,border:"none",borderRadius:28,padding:"16px 34px",
+            color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+            boxShadow:"0 8px 28px rgba(200,29,58,.42)",display:"flex",
+            alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
+          <span style={{fontSize:20,lineHeight:1}}>+</span> Zaznacz dzień
+        </button>
+      )}
+ 
+      {/* ── Overlays ────────────────────────────────────────────────────── */}
+      {sheetDayOpen && (
+        <div onClick={()=>setSheetDayOpen(false)}
+          style={{position:"fixed",inset:0,background:"rgba(122,46,64,.22)",
+            zIndex:10,backdropFilter:"blur(3px)"}}/>
+      )}
+      {sheetBlisterOpen && (
+        <div onClick={()=>{setSheetBlisterOpen(false);setBMode("menu");}}
+          style={{position:"fixed",inset:0,background:"rgba(122,46,64,.22)",
+            zIndex:10,backdropFilter:"blur(3px)"}}/>
+      )}
+
+      {/* ── Delete Confirmation Modal ──────────────────────────────────── */}
+      {deleteConfirmOpen && (
+        <>
+          <div onClick={cancelDelete}
+            style={{position:"fixed",inset:0,background:"rgba(122,46,64,.22)",
+              zIndex:20,backdropFilter:"blur(3px)"}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%, -50%)",
+            background:"white",borderRadius:24,padding:"32px 24px",
+            zIndex:21,maxWidth:320,boxShadow:"0 10px 40px rgba(200,29,58,.25)",
+            textAlign:"center"}}>
+            <div style={{fontSize:16,fontWeight:800,color:C.text,marginBottom:12}}>
+              Usunąć blister?
+            </div>
+            <div style={{fontSize:13,fontWeight:600,color:C.dark,opacity:.65,marginBottom:28}}>
+              Ta akcja nie może być cofnięta.
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              <button onClick={cancelDelete}
+                style={{padding:"12px 24px",borderRadius:16,border:"none",cursor:"pointer",
+                  background:C.pale,color:C.crimson,fontSize:14,fontWeight:800,
+                  flex:1}}>
+                Anuluj
+              </button>
+              <button onClick={confirmDelete}
+                style={{padding:"12px 24px",borderRadius:16,border:"none",cursor:"pointer",
+                  background:C.error,color:"white",fontSize:14,fontWeight:800,
+                  flex:1,boxShadow:"0 4px 12px rgba(255,9,34,1)"}}>
+                Usuń
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+ 
+      {/* ══════════════ SHEET: DZIEŃ ══════════════════════════════════════ */}
+      <div style={{position:"fixed",bottom:0,left:"50%",
+        transform:`translateX(-50%) translateY(${sheetDayOpen?"0":"105%"})`,
+        width:"100%",maxWidth:430,background:"white",borderRadius:"30px 30px 0 0",
+        padding:"14px 22px 52px",zIndex:11,
+        transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
+        boxShadow:"0 -6px 48px rgba(200,29,58,.16)"}}>
+ <div></div>
+        <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 22px"}}/>
+        <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
+          marginBottom:18,textTransform:"uppercase"}}>{selLabel}</div>
+ 
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {[
+            {field:"tabletka",   label:"Tabletka",    activeBg:C.coral,  sh:"rgba(255,92,138,.35)"},
+            {field:"freaky",     label:"Freaky",      activeBg:C.freak,  sh:"rgba(128,0,159,.4)"},
+            {field:"krwawienie", label:"Krwawienie",  activeBg:C.red,    sh:"rgba(255,39,42,.35)"},
+          ].map(item=>{
+            const on = !!selData[item.field];
+            return (
+              <button key={item.field} className="tog-btn" onClick={()=>toggle(item.field)}
+                style={{padding:"18px 22px",borderRadius:20,border:"none",cursor:"pointer",
+                  background:on?item.activeBg:C.pale,color:on?"white":C.crimson,
+                  fontSize:18,fontWeight:800,display:"flex",alignItems:"center",
+                  justifyContent:"space-between",
+                  boxShadow:on?`0 6px 20px ${item.sh}`:"none",
+                  transform:on?"scale(1.02)":"scale(1)"}}>
+                <span>{item.label}</span>
+                <div style={{width:32,height:32,borderRadius:"50%",
+                  background:on?"rgba(255,255,255,.22)":"rgba(200,29,58,.08)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:17,fontWeight:900,color:on?"white":C.crimson}}>
+                  {on?"✓":""}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+ 
+      {/* ══════════════ SHEET: BLISTER ════════════════════════════════════ */}
+      <div style={{position:"fixed",bottom:0,left:"50%",
+        transform:`translateX(-50%) translateY(${sheetBlisterOpen?"0":"105%"})`,
+        width:"100%",maxWidth:430,background:"white",borderRadius:"30px 30px 0 0",
+        padding:"14px 22px 52px",zIndex:11,
+        transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
+        boxShadow:"0 -6px 48px rgba(255,92,138,.18)",
+        maxHeight:"82vh",overflowY:"auto"}}>
+ 
+        <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 20px"}}/>
+ 
+        {/* ── MENU ── */}
+        {bMode==="menu" && (
+          <>
+            <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
+              marginBottom:20,textTransform:"uppercase"}}>Blister</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={startAdd}
+                style={{padding:"18px 22px",borderRadius:20,border:"none",cursor:"pointer",
+                  background:C.crimson,color:"white",fontSize:16,fontWeight:800,
+                  display:"flex",alignItems:"center",gap:12,
+                  boxShadow:"0 6px 20px rgba(200,29,58,.35)"}}>
+                <span style={{fontSize:20}}>+</span> Dodaj nowy blister
+              </button>
+              {blisters.length >= 0 && (
+                <button onClick={()=>setBMode("modify")}
+                  style={{padding:"18px 22px",borderRadius:20,border:"none",cursor:"pointer",
+                    background:C.pale,color:C.crimson,fontSize:16,fontWeight:800,
+                    display:"flex",alignItems:"center",gap:12}}>
+                  <span>↻</span> Modyfikuj blister
+                </button>
+              )}
+            </div>
+          </>
+        )}
+ 
+        {/* ── ADD ── */}
+        {bMode==="add" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <button onClick={()=>setBMode("menu")}
+                style={{background:C.pale,border:"none",borderRadius:12,padding:"8px 14px",
+                  cursor:"pointer",fontSize:14,fontWeight:800,color:C.crimson}}>← Wróć</button>
+              <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.5,textTransform:"uppercase"}}>
+                Dodaj nowy blister
+              </div>
+            </div>
+            <BlisterForm
+              formStart={formStart} setFormStart={setFormStart}
+              formDays={formDays}   setFormDays={setFormDays}
+              onSave={saveBlister}  onPickCalendar={startPickOnCalendar}
+              C={C}
+            />
+          </>
+        )}
+ 
+        {/* ── MODIFY (list) ── */}
+        {bMode==="modify" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <button onClick={()=>setBMode("menu")}
+                style={{background:C.pale,border:"none",borderRadius:12,padding:"8px 14px",
+                  cursor:"pointer",fontSize:14,fontWeight:800,color:C.crimson}}>← Wróć</button>
+              <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.5,textTransform:"uppercase"}}>
+                Twoje blistry
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[...blisters].reverse().map((b,ri)=>{
+                const isLast = ri===0;
+                return (
+                  <div key={b.id} className="list-item"
+                    style={{padding:"14px 18px",borderRadius:18,
+                      background:isLast?C.pale:"#f9f9f9",
+                      display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:800,color:C.text}}>
+                        {short(b.start)} — {short(bEnd(b))}
+                      </div>
+                      <div style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,marginTop:2}}>
+                        {b.days} dni · {pct(b)}% ukończony
+                        {isLast&&<span style={{color:C.crimson,fontWeight:800}}> · aktywny</span>}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>startEdit(b)}
+                        style={{background:C.crimson,border:"none",borderRadius:14,
+                          padding:"8px 16px",color:"white",fontSize:13,fontWeight:800,
+                          cursor:"pointer",flexShrink:0}}>
+                        Edytuj
+                      </button>
+                      <button onClick={()=>deleteBlister(b.id)}
+                        style={{background:C.error,border:"none",borderRadius:14,
+                          padding:"8px 16px",color:"white",fontSize:13,fontWeight:800,
+                          cursor:"pointer",flexShrink:0}}>
+                        Usuń
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+ 
+        {/* ── EDIT ── */}
+        {bMode==="edit" && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <button onClick={()=>setBMode("modify")}
+                style={{background:C.pale,border:"none",borderRadius:12,padding:"8px 14px",
+                  cursor:"pointer",fontSize:14,fontWeight:800,color:C.crimson}}>← Wróć</button>
+              <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.5,textTransform:"uppercase"}}>
+                Edytuj blister
+              </div>
+            </div>
+            <BlisterForm
+              formStart={formStart} setFormStart={setFormStart}
+              formDays={formDays}   setFormDays={setFormDays}
+              onSave={saveBlister}  onPickCalendar={startPickOnCalendar}
+              C={C} saveLabel="Zapisz zmiany"
+            />
+          </>
+        )}
+ 
+      </div>
+
+      {/* ══════════════ SHEET: STATYSTYKI ═════════════════════════════════ */}
+      <div style={{position:"fixed",bottom:0,left:"50%",
+        transform:`translateX(-50%) translateY(${sheetStatsOpen?"0":"105%"})`,
+        width:"100%",maxWidth:430,background:"white",borderRadius:"30px 30px 0 0",
+        padding:"14px 22px 52px",zIndex:11,
+        transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
+        boxShadow:"0 -6px 48px rgba(139,0,139,.12)"}}>
+
+        <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 22px"}}/>
+        <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
+          marginBottom:24,textTransform:"uppercase",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>Statystyki {MONTHS[mo]}</span>
+          <button onClick={()=>setSheetStatsOpen(false)}
+            style={{background:"rgba(139,0,139,.1)",border:"none",borderRadius:10,
+              padding:"5px 12px",color:"#8B008B",fontWeight:900,cursor:"pointer",fontSize:16}}>
+            ✕
+          </button>
+        </div>
+
+        {(() => {
+          const stats = getMonthStats(yr, mo);
+          return (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{padding:"18px 22px",borderRadius:20,background:"#f8f0ff",
+                border:`2px solid #80009f`}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.freak,letterSpacing:1.2,marginBottom:8,textTransform:"uppercase"}}>
+                 😈 Ilość Freaku
+                </div>
+                <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+                  <div style={{fontSize:28,fontWeight:900,color:"#80009f"}}>
+                    {stats.freakyCount}
+                  </div>
+                  <div style={{fontSize:20,fontWeight:700,color:"#80009f"}}>
+                    ({stats.freakyPct}%)
+                  </div>
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:C.dark,opacity:.5}}>
+                  z {stats.totalDays} dni w miesiącu
+                </div>
+              </div>
+
+              <div style={{padding:"18px 22px",borderRadius:20,background:"#fff0ff",
+                border:`2px solid #FF5C8A`}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.2,marginBottom:8,textTransform:"uppercase"}}>
+                   Ilość krwawień
+                </div>
+                <div style={{fontSize:28,fontWeight:900,color:C.crimson}}>
+                  {stats.krwawieniaCount}
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:C.dark,opacity:.5,marginTop:6}}>
+                  z {stats.totalDays} dni w miesiącu
+                </div>
+              </div>
+
+              <div style={{padding:"18px 22px",borderRadius:20,background:stats.noTabletkaCount===0?"#f0fff4":"#fff0f0",
+                border:`2px solid ${stats.noTabletkaCount===0?"#27ae60":"#FF272A"}`}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.2,marginBottom:8,textTransform:"uppercase"}}>
+                  Skipnięte tabletki
+                </div>
+                {stats.noTabletkaCount === 0 ? (
+                  <div style={{fontSize:18,fontWeight:900,color:"#27ae60",lineHeight:1.6}}>
+                    😘 Dobra Robota!
+                  </div>
+                ) : (
+                  <div style={{fontSize:14,fontWeight:700,color:C.red,lineHeight:1.6}}>
+                    {stats.noTabletkaDay.join(", ")}
+                  </div>
+                )}
+                <div style={{fontSize:11,fontWeight:600,color:C.dark,opacity:.5,marginTop:6}}>
+                  {stats.noTabletkaCount} dni bez tabletki
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+ 
+// ── BlisterForm component ─────────────────────────────────────────────────────
+function BlisterForm({ formStart, setFormStart, formDays, setFormDays, onSave, onPickCalendar, C, saveLabel="Zapisz blister" }) {
+  const valid = formStart && parseInt(formDays) >= 1;
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+ 
+      <div>
+        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:.45,
+          marginBottom:6,letterSpacing:.8}}>POCZĄTEK BLISTRA</div>
+        <div style={{display:"flex",gap:8}}>
+          <input type="date" value={formStart} onChange={e=>setFormStart(e.target.value)}
+            style={{flex:1}}/>
+          <button onClick={onPickCalendar}
+            style={{padding:"0 16px",borderRadius:16,border:"none",background:C.crimson,
+              color:"white",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",
+              flexShrink:0}}>
+            📅 Kalendarz
+          </button>
+        </div>
+      </div>
+ 
+      <div>
+        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:.45,
+          marginBottom:6,letterSpacing:.8}}>ILOŚĆ DNI</div>
+        <input type="number" value={formDays} min="1" max="90"
+          onChange={e=>setFormDays(e.target.value)}/>
+      </div>
+ 
+      {formStart && parseInt(formDays) >= 1 && (
+        <div style={{padding:"10px 16px",borderRadius:14,background:"#f0fff4",
+          fontSize:13,fontWeight:700,color:"#27ae60"}}>
+          📅 {formStart.split("-").reverse().slice(0,2).join(".")} → {(() => {
+            const [y,m,d] = formStart.split("-").map(Number);
+            const dt = new Date(y, m-1, d);
+            dt.setDate(dt.getDate() + parseInt(formDays) - 1);
+            return `${dt.getDate()}.${String(dt.getMonth()+1).padStart(2,"0")}`;
+          })()}
+          <span style={{opacity:.7}}> ({formDays} dni)</span>
+        </div>
+      )}
+ 
+      <button onClick={onSave}
+        style={{marginTop:4,padding:"17px",borderRadius:20,border:"none",
+          cursor:valid?"pointer":"default",fontSize:16,fontWeight:800,color:"white",
+          background:valid?C.crimson:C.blush,opacity:valid?1:.55,
+          boxShadow:valid?"0 6px 20px rgba(200,29,58,.35)":"none"}}>
+        {saveLabel}
+      </button>
+    </div>
+  );
+}
+ 
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
