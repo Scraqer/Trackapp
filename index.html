@@ -365,10 +365,10 @@ function App() {
   return (
     <div
       style={{fontFamily:"'Nunito',sans-serif",
-        backgroundImage:'url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg")',
+        backgroundImage:'linear-gradient(rgba(255, 227, 236,0.75), rgba(255, 227, 236,0.75)), url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg")',
         backgroundSize:"cover",
         backgroundPosition:"center",
-        backgroundRepeat:"no-repeat",
+        backgroundRepeat:"repeat",
         minHeight:"100vh",
         maxWidth:430,margin:"0 auto",position:"relative",userSelect:"none",
         paddingTop:"env(safe-area-inset-top)"}}
@@ -545,7 +545,7 @@ function App() {
       )}
       {!sheetStatsOpen && !pickMode && (
         <button className="fab" onClick={()=>setSheetStatsOpen(true)}
-          style={{position:"fixed",bottom:90,left:"50%",transform:"translateX(-50%)",
+          style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",
             background:"#8B008B",border:"none",borderRadius:28,padding:"16px 34px",
             color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
             boxShadow:"0 8px 28px rgba(139,0,139,.42)",display:"flex",
@@ -555,7 +555,7 @@ function App() {
       )}
       {!sheetDayOpen && !pickMode && (
         <button className="fab" onClick={()=>{setSelDate(todayKey);setSheetDayOpen(true);}}
-          style={{position:"fixed",bottom:24,right:24,transform:"translateX(-50%)",
+          style={{position:"fixed",bottom:24,left:"57%",transform:"translateX(-50%)",
             background:C.crimson,border:"none",borderRadius:28,padding:"16px 34px",
             color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
             boxShadow:"0 8px 28px rgba(200,29,58,.42)",display:"flex",
@@ -566,12 +566,12 @@ function App() {
 
       {!streakModalOpen && !pickMode && (
         <button className="fab" onClick={()=>setStreakModalOpen(true)}
-          style={{position:"fixed",bottom:156,left:"50%",transform:"translateX(-50%)",
+          style={{position:"fixed",bottom:154,left:"50%",transform:"translateX(-50%)",
             background:"#FF6B35",border:"none",borderRadius:28,padding:"16px",
             color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
             boxShadow:"0 8px 28px rgba(255,107,53,.42)",display:"flex",
             alignItems:"center",justifyContent:"center",zIndex:5}}>
-         <span style={{fontSize:20,lineHeight:1}}>🔥</span> Obecny Streak{currentStreak}
+         <span style={{fontSize:20,lineHeight:1}}>🔥</span> Obecny Streak  {currentStreak}
         </button>
       )}
  
