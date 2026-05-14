@@ -29,7 +29,7 @@ body { min-height: 100.1vh; background: #FFE3EC ; overscroll-behavior-x: none; }
 .fab { transition: all .15s ease; }
 .fab:active { transform: translateX(-50%) scale(.93) !important; }
 .list-item { transition: background .15s ease; }
-.list-item:active { background: #FFD6E8 url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg") !important; }
+.list-item:active { background: #FFD6E8 !important; }
 @keyframes sR { from{opacity:0;transform:translateX(32px)} to{opacity:1;transform:translateX(0)} }
 @keyframes sL { from{opacity:0;transform:translateX(-32px)} to{opacity:1;transform:translateX(0)} }
 .anim-r { animation: sR .28s cubic-bezier(.22,1,.36,1) both; }
@@ -567,7 +567,7 @@ function App() {
       {!streakModalOpen && !pickMode && (
         <button className="fab" onClick={()=>setStreakModalOpen(true)}
           style={{position:"fixed",bottom:154,left:"50%",transform:"translateX(-50%)",
-            background:"#FF6B35",border:"none",borderRadius:28,padding:"16px",
+            background:"#FF6B35",border:"none",borderRadius:28,padding:"16px 34px",
             color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
             boxShadow:"0 8px 28px rgba(255,107,53,.42)",display:"flex",
             alignItems:"center",justifyContent:"center",zIndex:5}}>
