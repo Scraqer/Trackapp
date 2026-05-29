@@ -29,7 +29,7 @@ body { min-height: 100.1vh; background: #FFE3EC ; overscroll-behavior-x: none; }
 .fab { transition: all .15s ease; }
 .fab:active { transform: translateX(-50%) scale(.93) !important; }
 .list-item { transition: background .15s ease; }
-.list-item:active { background: #FFD6E8 !important; }
+.list-item:active { background: #FFD6E8 url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg") !important; }
 @keyframes sR { from{opacity:0;transform:translateX(32px)} to{opacity:1;transform:translateX(0)} }
 @keyframes sL { from{opacity:0;transform:translateX(-32px)} to{opacity:1;transform:translateX(0)} }
 .anim-r { animation: sR .28s cubic-bezier(.22,1,.36,1) both; }
@@ -37,7 +37,7 @@ body { min-height: 100.1vh; background: #FFE3EC ; overscroll-behavior-x: none; }
 input[type=date], input[type=number] {
   font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 700;
   padding: 14px 16px; border: none; border-radius: 16px;
-  background: #FFE3EC url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg"); color: #3d1520; width: 100%;
+  background: #FFF0F5; color: #3d1520; width: 100%;
   outline: none; -webkit-appearance: none; appearance: none;
 }
 </style>
@@ -74,7 +74,7 @@ input[type=date], input[type=number] {
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
-const { useState, useRef } = React;
+const { useState, useRef, useEffect } = React;
  
 const STORAGE_KEY  = "trackapp-v1";
 const BLISTERS_KEY = "trackapp-blisters-v1";
@@ -163,6 +163,10 @@ function App() {
 
   // Daily streak counter
   const [streakModalOpen,   setStreakModalOpen]   = useState(false);
+  const [numpadOpen,        setNumpadOpen]        = useState(false);
+  const [numpadValue,       setNumpadValue]       = useState("");
+  const [secretMenuOpen,    setSecretMenuOpen]    = useState(false);
+  const [secretStreakVal,   setSecretStreakVal]   = useState("");
   const [currentStreak,     setCurrentStreak]     = useState(() => {
     const stored = ls(STREAK_KEY, null);
     return stored || 0;
@@ -176,7 +180,35 @@ function App() {
   const [pickMode, setPickMode] = useState(false);
  
   const touchX = useRef(null);
- 
+
+  // Reset streak if a day was skipped — runs on mount and again at midnight
+  useEffect(() => {
+    const checkStreakValidity = () => {
+      const n = new Date();
+      const tStr = fmtKey(n.getFullYear(), n.getMonth(), n.getDate());
+      const yest = new Date(n);
+      yest.setDate(yest.getDate() - 1);
+      const yStr = fmtKey(yest.getFullYear(), yest.getMonth(), yest.getDate());
+      const storedStreak = ls(STREAK_KEY, 0);
+      const storedLast   = ls(LAST_STREAK_DATE_KEY, null);
+      // Streak is only still alive if lastStreakDate is today or yesterday
+      if (storedStreak > 0 && (!storedLast || (storedLast !== tStr && storedLast !== yStr))) {
+        setCurrentStreak(0);
+        lss(STREAK_KEY, 0);
+        lss(LAST_STREAK_DATE_KEY, null);
+        setLastStreakDate(null);
+      }
+    };
+
+    checkStreakValidity();
+
+    // Fire again just after midnight so the reset happens automatically
+    const n = new Date();
+    const midnight = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+    const timer = setTimeout(checkStreakValidity, midnight - n + 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // ── tracker toggle ─────────────────────────────────────────────────────────
   const toggle = field => {
     const e = {...(data[selDate]||{})};
@@ -214,11 +246,21 @@ function App() {
           return newStreak;
         });
       } else if (!e[field] && selDate === todayKey && currentStreak > 0) {
-        // Tablet unmarked for today - reset streak
-        setCurrentStreak(0);
-        lss(STREAK_KEY, 0);
-        lss(LAST_STREAK_DATE_KEY, null);
-        setLastStreakDate(null);
+        // Tablet unmarked for today - subtract 1, not reset to 0
+        const newStreak = Math.max(0, currentStreak - 1);
+        // Roll lastStreakDate back to yesterday so re-checking today will add back
+        const yest = new Date(now);
+        yest.setDate(yest.getDate() - 1);
+        const yesterdayKey = fmtKey(yest.getFullYear(), yest.getMonth(), yest.getDate());
+        setCurrentStreak(newStreak);
+        lss(STREAK_KEY, newStreak);
+        if (newStreak > 0) {
+          lss(LAST_STREAK_DATE_KEY, yesterdayKey);
+          setLastStreakDate(yesterdayKey);
+        } else {
+          lss(LAST_STREAK_DATE_KEY, null);
+          setLastStreakDate(null);
+        }
       }
     }
   };
@@ -305,6 +347,55 @@ function App() {
   const cancelDelete = () => {
     setDeleteConfirmOpen(false);
     setDeleteConfirmId(null);
+  };
+
+  // ── numpad ─────────────────────────────────────────────────────────────────
+  const numpadPress = val => {
+    if (val === "back") {
+      setNumpadValue(prev => prev.slice(0, -1));
+    } else if (val === "ok") {
+      const n = parseInt(numpadValue);
+      if (!isNaN(n) && n >= 0) {
+        setCurrentStreak(n);
+        lss(STREAK_KEY, n);
+        if (n > 0) {
+          lss(LAST_STREAK_DATE_KEY, todayKey);
+          setLastStreakDate(todayKey);
+        } else {
+          lss(LAST_STREAK_DATE_KEY, null);
+          setLastStreakDate(null);
+        }
+      }
+      setNumpadOpen(false);
+      setNumpadValue("");
+    } else {
+      const next = (numpadValue + val).slice(0, 4);
+      if (next === "2408") {
+        setNumpadOpen(false);
+        setNumpadValue("");
+        setSecretStreakVal("");
+        setSecretMenuOpen(true);
+      } else {
+        setNumpadValue(next);
+      }
+    }
+  };
+
+  const confirmSecretStreak = () => {
+    const n = parseInt(secretStreakVal);
+    if (!isNaN(n) && n >= 0) {
+      setCurrentStreak(n);
+      lss(STREAK_KEY, n);
+      if (n > 0) {
+        lss(LAST_STREAK_DATE_KEY, todayKey);
+        setLastStreakDate(todayKey);
+      } else {
+        lss(LAST_STREAK_DATE_KEY, null);
+        setLastStreakDate(null);
+      }
+    }
+    setSecretMenuOpen(false);
+    setSecretStreakVal("");
   };
 
   // ── statistics ──────────────────────────────────────────────────────────
@@ -567,10 +658,10 @@ function App() {
       {!streakModalOpen && !pickMode && (
         <button className="fab" onClick={()=>setStreakModalOpen(true)}
           style={{position:"fixed",bottom:154,left:"50%",transform:"translateX(-50%)",
-            background:"#FF6B35",border:"none",borderRadius:28,padding:"16px 34px",
+            background:"#FF6B35",border:"none",borderRadius:28,padding:"16px",
             color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
             boxShadow:"0 8px 28px rgba(255,107,53,.42)",display:"flex",
-            alignItems:"center",gap:10,justifyContent:"center",zIndex:5,whiteSpace:"nowrap"}}>
+            alignItems:"center",justifyContent:"center",zIndex:5}}>
          <span style={{fontSize:20,lineHeight:1}}>🔥</span> Obecny Streak  {currentStreak}
         </button>
       )}
@@ -587,11 +678,113 @@ function App() {
             zIndex:10,backdropFilter:"blur(3px)"}}/>
       )}
 
-      {/* ── Streak Modal Overlay ──────────────────────────────────────── */}
+      {/* ── Numpad Modal ──────────────────────────────────────────────── */}
+      {numpadOpen && (
+        <>
+          <div onClick={()=>{setNumpadOpen(false);setNumpadValue("");}}
+            style={{position:"fixed",inset:0,background:"rgba(122,46,64,.3)",
+              zIndex:29,backdropFilter:"blur(4px)"}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",
+            transform:"translate(-50%,-50%)",
+            background:"white",borderRadius:28,padding:"24px 20px",
+            zIndex:30,boxShadow:"0 20px 60px rgba(200,29,58,.25)",
+            width:280,maxWidth:"90vw"}}>
+
+            {/* Display */}
+            <div style={{background:C.pale,borderRadius:16,padding:"14px 20px",
+              textAlign:"center",fontSize:40,fontWeight:900,color:C.crimson,
+              marginBottom:20,minHeight:68,letterSpacing:3,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {numpadValue}
+            </div>
+
+            {/* Keys */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+              {[1,2,3,4,5,6,7,8,9].map(n=>(
+                <button key={n} onClick={()=>numpadPress(String(n))}
+                  style={{padding:"18px 0",borderRadius:16,border:"none",
+                    background:C.pale,color:C.text,fontSize:22,fontWeight:800,
+                    cursor:"pointer"}}>
+                  {n}
+                </button>
+              ))}
+              <button onClick={()=>numpadPress("back")}
+                style={{padding:"18px 0",borderRadius:16,border:"none",
+                  background:"#fff0f0",color:C.crimson,fontSize:22,fontWeight:800,
+                  cursor:"pointer"}}>
+                ←
+              </button>
+              <button onClick={()=>numpadPress("0")}
+                style={{padding:"18px 0",borderRadius:16,border:"none",
+                  background:C.pale,color:C.text,fontSize:22,fontWeight:800,
+                  cursor:"pointer"}}>
+                0
+              </button>
+              <button onClick={()=>numpadPress("ok")}
+                style={{padding:"18px 0",borderRadius:16,border:"none",
+                  background:C.crimson,color:"white",fontSize:22,fontWeight:800,
+                  cursor:"pointer",boxShadow:"0 4px 14px rgba(200,29,58,.35)"}}>
+                ✓
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+
+      {/* ── Secret Menu ───────────────────────────────────────────────── */}
+      {secretMenuOpen && (
+        <>
+          <div onClick={()=>setSecretMenuOpen(false)}
+            style={{position:"fixed",inset:0,background:"rgba(122,46,64,.35)",
+              zIndex:29,backdropFilter:"blur(5px)"}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",
+            transform:"translate(-50%,-50%)",
+            background:"white",borderRadius:28,padding:"30px 24px",
+            zIndex:30,boxShadow:"0 20px 60px rgba(200,29,58,.3)",
+            width:290,maxWidth:"90vw",textAlign:"center"}}>
+
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:2.5,
+              color:C.blush,textTransform:"uppercase",marginBottom:6}}>
+              🔐 Menu ukryte
+            </div>
+            <div style={{fontSize:20,fontWeight:900,color:C.crimson,marginBottom:24}}>
+              Zmień Streak
+            </div>
+
+            <input
+              type="number"
+              value={secretStreakVal}
+              onChange={e=>setSecretStreakVal(e.target.value)}
+              placeholder="Wpisz nowy streak..."
+              style={{width:"100%",padding:"14px 18px",borderRadius:16,
+                border:`2px solid ${C.pale}`,fontSize:22,fontWeight:800,
+                color:C.crimson,textAlign:"center",outline:"none",
+                background:C.pale,boxSizing:"border-box",marginBottom:18}}
+            />
+
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setSecretMenuOpen(false)}
+                style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",
+                  background:C.pale,color:C.dark,fontWeight:700,fontSize:15,
+                  cursor:"pointer"}}>
+                Anuluj
+              </button>
+              <button onClick={confirmSecretStreak}
+                style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",
+                  background:C.crimson,color:"white",fontWeight:800,fontSize:15,
+                  cursor:"pointer",boxShadow:"0 4px 14px rgba(200,29,58,.35)"}}>
+                Zapisz ✓
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {streakModalOpen && (
         <div onClick={()=>setStreakModalOpen(false)}
-          style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",
-            zIndex:25,backdropFilter:"blur(8px)"}}/>
+          style={{position:"fixed",inset:0,background:"rgba(122,46,64,.22)",
+            zIndex:10,backdropFilter:"blur(3px)"}}/>
       )}
 
       {/* ── Delete Confirmation Modal ──────────────────────────────────── */}
@@ -628,68 +821,55 @@ function App() {
         </>
       )}
 
-      {/* ── Streak Modal ──────────────────────────────────────────────── */}
-      {streakModalOpen && (
-        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%, -50%)",
-          background:"white",borderRadius:24,padding:"40px 32px",
-          zIndex:26,boxShadow:"0 20px 60px rgba(0,0,0,.3)",
-          textAlign:"center",maxWidth:300,width:"90%"}}>
-          {/* Exit Button */}
+      {/* ══════════════ SHEET: STREAK ═════════════════════════════════════ */}
+      <div style={{position:"fixed",bottom:0,left:"50%",
+        transform:`translateX(-50%) translateY(${streakModalOpen?"0":"105%"})`,
+        width:"100%",maxWidth:430,background:"white",borderRadius:"30px 30px 0 0",
+        padding:"14px 22px 52px",zIndex:11,
+        transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
+        boxShadow:"0 -6px 48px rgba(255,107,53,.18)",
+        textAlign:"center"}}>
+
+        <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 22px"}}/>
+
+        <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
+          marginBottom:24,textTransform:"uppercase",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>🔥 Streak</span>
           <button onClick={()=>setStreakModalOpen(false)}
-            style={{position:"absolute",top:16,right:16,background:"rgba(200,29,58,.1)",
-              border:"none",borderRadius:"50%",width:32,height:32,
-              cursor:"pointer",display:"flex",alignItems:"center",
-              justifyContent:"center",color:C.crimson,fontSize:20,
-              fontWeight:800,padding:0}}>
+            style={{background:"rgba(255,107,53,.1)",border:"none",borderRadius:10,
+              padding:"5px 12px",color:"#FF6B35",fontWeight:900,cursor:"pointer",fontSize:16}}>
             ✕
           </button>
-
-          {/* Fire GIF / Emoji */}
-         {currentStreak > 0 ? (
-            <div style={{fontSize:80,marginBottom:20,lineHeight:1,animation:"pulse 2s infinite"}}>
-              <img src={Gifhappy[Math.floor(Math.random() * Gifhappy.length)]} style={{width:100,height:100}} />
-            </div>
-          ) : (
-            <div style={{fontSize:80,marginBottom:20,lineHeight:1,animation:"random 2s infinite"}}>
-              <img src={Gifsad[Math.floor(Math.random() * Gifsad.length)]} style={{width:100,height:100}} />
-            </div>
-          )
-          
-          }
-          <div style={{fontSize:80,marginBottom:20,lineHeight:1,animation:"pulse 2s infinite"}}>
-            
-          </div>
-
-          {/* Streak Title */}
-          <div style={{fontSize:14,fontWeight:700,color:C.dark,opacity:.6,marginBottom:8}}>
-            OBECNY STREAK
-          </div>
-
-          {/* Streak Number */}
-          <div style={{fontSize:48,fontWeight:900,color:C.crimson,marginBottom:20,
-            textShadow:"0 2px 8px rgba(200,29,58,.2)"}}>
-            {currentStreak}
-          </div>
-
-          {/* Streak Label */}
-          <div style={{fontSize:13,fontWeight:600,color:C.dark,opacity:.7,marginBottom:24}}>
-            dni z rzędu 🎉
-          </div>
-
-          {/* Motivational Message */}
-          {currentStreak > 0 ? (
-            <div style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,
-              fontStyle:"italic",paddingTop:16,borderTop:`1px solid ${C.pale}`}}>
-              {Messages[Math.floor(Math.random() * Messages.length)]}
-            </div>
-          ) : 
-            <div style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,
-              fontStyle:"italic",paddingTop:16,borderTop:`1px solid ${C.pale}`}}>
-              MAMMA MIAAAAA! 😭😭😭😭😭😭😭😭😭
-            </div>
-          }
         </div>
-      )}
+
+        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+          {currentStreak > 0 ? (
+            <img onClick={()=>{setNumpadValue("");setNumpadOpen(true);}}
+              src={Gifhappy[Math.floor(Math.random() * Gifhappy.length)]}
+              style={{width:100,height:100,borderRadius:16,cursor:"pointer"}} />
+          ) : (
+            <img onClick={()=>{setNumpadValue("");setNumpadOpen(true);}}
+              src={Gifsad[Math.floor(Math.random() * Gifsad.length)]}
+              style={{width:100,height:100,borderRadius:16,cursor:"pointer"}} />
+          )}
+        </div>
+
+        <div style={{fontSize:48,fontWeight:900,color:C.crimson,marginBottom:8,
+          textShadow:"0 2px 8px rgba(200,29,58,.2)"}}>
+          {currentStreak}
+        </div>
+
+        <div style={{fontSize:13,fontWeight:600,color:C.dark,opacity:.7,marginBottom:24}}>
+          dni z rzędu 🎉
+        </div>
+
+        <div style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,
+          fontStyle:"italic",paddingTop:16,borderTop:`1px solid ${C.pale}`}}>
+          {currentStreak > 0
+            ? Messages[Math.floor(Math.random() * Messages.length)]
+            : "MAMMA MIAAAAA! 😭😭😭😭😭😭😭😭😭"}
+        </div>
+      </div>
  
       <style>{`
         @keyframes pulse {
@@ -951,11 +1131,11 @@ function BlisterForm({ formStart, setFormStart, formDays, setFormDays, onSave, o
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
  
       <div>
-        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:.45,
+        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:1,
           marginBottom:6,letterSpacing:.8}}>POCZĄTEK BLISTRA</div>
         <div style={{display:"flex",gap:8}}>
           <input type="date" value={formStart} onChange={e=>setFormStart(e.target.value)}
-            style={{flex:1}}/>
+            style={{ flex: 1, backgroundColor: '#FFF0F5', border: 'none', borderRadius: 8, padding: '8px 12px' }}/>
           <button onClick={onPickCalendar}
             style={{padding:"0 16px",borderRadius:16,border:"none",background:C.crimson,
               color:"white",fontSize:13,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",
@@ -966,7 +1146,7 @@ function BlisterForm({ formStart, setFormStart, formDays, setFormDays, onSave, o
       </div>
  
       <div>
-        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:.45,
+        <div style={{fontSize:11,fontWeight:800,color:C.dark,opacity:1,
           marginBottom:6,letterSpacing:.8}}>ILOŚĆ DNI</div>
         <input type="number" value={formDays} min="1" max="90"
           onChange={e=>setFormDays(e.target.value)}/>
