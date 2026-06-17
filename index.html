@@ -70,10 +70,14 @@ input[type=date], input[type=number] {
 <body>
 <div id="root"></div>
 <script>window.addEventListener('load',()=>setTimeout(()=>window.scrollTo(0,1),100));</script>
-<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js" crossorigin></script>
-<script type="text/babel">
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.19/babel.min.js" crossorigin></script>
+<script>if (!window.React || !window.ReactDOM || !window.Babel) {
+  document.body.innerHTML = '<div style="padding:30px;font-family:sans-serif;color:#9b1a33;background:#ffe3ec;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center"><div><strong>Script load failed.</strong><p>Please reload or check your internet access.</p></div></div>';
+  throw new Error('Required scripts failed to load');
+}</script>
+<script type="text/babel" data-presets="env" data-plugins="transform-react-jsx">
 const { useState, useRef, useEffect } = React;
  
 const STORAGE_KEY  = "trackapp-v1";
@@ -82,7 +86,7 @@ const STREAK_KEY   = "trackapp-streak-v1";
 const LAST_STREAK_DATE_KEY = "trackapp-last-streak-date-v1";
  
 const MONTHS = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec",
-                "Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"]; 
+                "Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
 const DAYS   = ["Pn","Wt","Śr","Cz","Pt","Sb","Nd"];
  
 const C = {
