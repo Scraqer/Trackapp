@@ -1,2 +1,3 @@
 # Aplikacja trakująca branie tabletek
-Dla kociaka
+Dla kociaka<3
+
