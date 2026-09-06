@@ -40,7 +40,7 @@ body { min-height: 100.1vh; background: #FFE3EC; overscroll-behavior-x: none; }
 .anim-r { animation: sR .25s cubic-bezier(.22,1,.36,1) both; }
 .anim-l { animation: sL .25s cubic-bezier(.22,1,.36,1) both; }
 
-input[type=date], input[type=number] {
+input[type=date], input[type=number], input[type=time] {
   font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 700;
   padding: 14px 16px; border: none; border-radius: 16px;
   background: #FFF0F5; color: #3d1520; width: 100%;
@@ -90,6 +90,17 @@ const STORAGE_KEY  = "trackapp-v1";
 const BLISTERS_KEY = "trackapp-blisters-v1";
 const STREAK_KEY   = "trackapp-streak-v1";
 const LAST_STREAK_DATE_KEY = "trackapp-last-streak-date-v1";
+const NOTIF_ENABLED_KEY = "trackapp-notif-enabled-v1";
+const NOTIF_TIME_KEY    = "trackapp-notif-time-v1";
+const NOTIF_WORKER_URL_KEY = "trackapp-notif-worker-url-v1";
+const NOTIF_VAPID_KEY   = "trackapp-notif-vapid-v1";
+
+// ============================================================================
+// 🔔 KONFIGURACJA CHMURY POWIADOMIEŃ:
+// ============================================================================
+const DEFAULT_NOTIF_WORKER_URL       = "https://trackapp-worker.domgwizdz.workers.dev"; // URL Workera (✅ bezpieczny w kodzie)
+const DEFAULT_NOTIF_VAPID_PUBLIC_KEY = ""; // <-- LINIA 102: Wklej tu swój Public Key VAPID (✅ bezpieczny w kodzie)
+// ============================================================================
  
 const MONTHS = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec",
                 "Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
@@ -194,8 +205,240 @@ function App() {
   const [sadGifs, setSadGifs]     = useState(DEFAULT_GIF_SAD);
   const [activeGif, setActiveGif] = useState("");
  
+  const [notifEnabled,   setNotifEnabled]   = useState(() => ls(NOTIF_ENABLED_KEY, false));
+  const [notifTime,      setNotifTime]      = useState(() => ls(NOTIF_TIME_KEY, "20:00"));
+  const [notifWorkerUrl, setNotifWorkerUrl] = useState(() => ls(NOTIF_WORKER_URL_KEY, DEFAULT_NOTIF_WORKER_URL));
+  const [notifVapidKey,  setNotifVapidKey]  = useState(() => ls(NOTIF_VAPID_KEY, DEFAULT_NOTIF_VAPID_PUBLIC_KEY));
+  const [notifPermission,setNotifPermission]= useState(() => typeof Notification !== "undefined" ? Notification.permission : "unsupported");
+  const [notifStatusMsg, setNotifStatusMsg] = useState("");
+  const [notifConfigOpen,setNotifConfigOpen] = useState(false);
+
   const [pickMode, setPickMode] = useState(false);
   const touchX = useRef(null);
+
+  // Rejestracja Service Workera
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => {
+          console.log("Service Worker zarejestrowany:", reg.scope);
+        })
+        .catch(err => {
+          console.warn("Błąd rejestracji Service Workera:", err);
+        });
+    }
+  }, []);
+
+  // Pomocnik do konwersji klucza publicznego VAPID urlBase64 na Uint8Array
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Funkcja subskrypcji Web Push i wysyłki do Cloudflare Workera
+  const syncPushSubscription = async (enabled, timeVal, targetWorkerUrl, targetVapid) => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setNotifStatusMsg("Twoje urządzenie nie wspiera Web Push");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (!enabled) {
+        setNotifStatusMsg("Powiadomienia wyłączone");
+        return;
+      }
+
+      const vapidKeyToUse = (targetVapid || DEFAULT_NOTIF_VAPID_PUBLIC_KEY || "").trim();
+      const workerUrlToUse = (targetWorkerUrl || DEFAULT_NOTIF_WORKER_URL || "").trim().replace(/\/$/, '');
+
+      if (!vapidKeyToUse) {
+        setNotifStatusMsg("⚠️ Brak klucza VAPID! Wpisz go w Chmurze lub kodzie");
+        return;
+      }
+
+      let sub = await reg.pushManager.getSubscription();
+      const vapidBytes = urlBase64ToUint8Array(vapidKeyToUse);
+
+      // Jeśli subskrypcja istnieje, ale klucz serwera się zmienił - odświeżamy
+      if (sub && sub.options && sub.options.applicationServerKey) {
+        const curKey = new Uint8Array(sub.options.applicationServerKey);
+        let match = curKey.length === vapidBytes.length;
+        if (match) {
+          for (let i = 0; i < curKey.length; i++) {
+            if (curKey[i] !== vapidBytes[i]) { match = false; break; }
+          }
+        }
+        if (!match) {
+          await sub.unsubscribe();
+          sub = null;
+        }
+      }
+
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidBytes
+        });
+      }
+
+      if (workerUrlToUse) {
+        setNotifStatusMsg("Łączenie z chmurą...");
+        const res = await fetch(`${workerUrlToUse}/subscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub, time: timeVal })
+        });
+        if (res.ok) {
+          setNotifStatusMsg("Zsynchronizowano z chmurą ✅");
+        } else {
+          setNotifStatusMsg(`Błąd serwera chmury ⚠️ (${res.status})`);
+        }
+      } else {
+        setNotifStatusMsg("Zapisano (wpisz URL Workera w Chmurze)");
+      }
+    } catch (err) {
+      console.warn("Błąd Push:", err);
+      setNotifStatusMsg("Błąd subskrypcji: " + (err.message || "sprawdź klucz VAPID"));
+    }
+  };
+
+  // Sprawdzanie lokalne w tle podczas otwartej aplikacji
+  useEffect(() => {
+    if (!notifEnabled || !notifTime) return;
+    const interval = setInterval(() => {
+      const now = new Date();
+      const curTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      if (curTime === notifTime && now.getSeconds() === 0) {
+        const lNow = getLogicalDate();
+        const curToday = fmtKey(lNow.getFullYear(), lNow.getMonth(), lNow.getDate());
+        const todayEntry = data[curToday];
+        if (!todayEntry || !todayEntry.tabletka) {
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            try {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(reg => {
+                  reg.showNotification("Trackapp 💊", {
+                    body: "Pamiętaj o wzięciu tabletki! 💕",
+                    icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+                    tag: "trackapp-pill-reminder",
+                    renotify: true
+                  });
+                });
+              } else {
+                new Notification("Trackapp 💊", {
+                  body: "Pamiętaj o wzięciu tabletki! 💕",
+                  icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png"
+                });
+              }
+            } catch (e) {
+              console.warn(e);
+            }
+          }
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [notifEnabled, notifTime, data]);
+
+  const handleToggleNotif = async () => {
+    if (typeof Notification === "undefined") {
+      alert("Twoja przeglądarka nie wspiera powiadomień.");
+      return;
+    }
+
+    if (!notifEnabled) {
+      // Prośba o uprawnienia
+      let perm = Notification.permission;
+      if (perm !== "granted") {
+        perm = await Notification.requestPermission();
+        setNotifPermission(perm);
+      }
+      if (perm === "granted") {
+        setNotifEnabled(true);
+        lss(NOTIF_ENABLED_KEY, true);
+        syncPushSubscription(true, notifTime, notifWorkerUrl, notifVapidKey);
+      } else {
+        alert("Powiadomienia zostały zablokowane w ustawieniach przeglądarki lub systemu.");
+      }
+    } else {
+      setNotifEnabled(false);
+      lss(NOTIF_ENABLED_KEY, false);
+      setNotifStatusMsg("Powiadomienia wyłączone");
+    }
+  };
+
+  const handleTimeChange = (e) => {
+    const val = e.target.value;
+    setNotifTime(val);
+    lss(NOTIF_TIME_KEY, val);
+    if (notifEnabled) {
+      syncPushSubscription(true, val, notifWorkerUrl, notifVapidKey);
+    }
+  };
+
+  const testNotification = async () => {
+    if (typeof Notification === "undefined") {
+      alert("Powiadomienia nie są obsługiwane na tym urządzeniu.");
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm !== "granted") {
+      perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+    }
+    if (perm === "granted") {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification("Trackapp 💊", {
+          body: `Lokalny test powiadomienia! Zaplanowano na godz. ${notifTime}.`,
+          icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+          badge: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+          vibrate: [200, 100, 200],
+          tag: "trackapp-test"
+        });
+      } else {
+        new Notification("Trackapp 💊", {
+          body: `Lokalny test powiadomienia! Zaplanowano na godz. ${notifTime}.`,
+          icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png"
+        });
+      }
+
+      // Jeśli skonfigurowano URL chmury, wyślij test z chmury przez Web Push
+      const workerUrlToUse = (notifWorkerUrl || DEFAULT_NOTIF_WORKER_URL || "").trim().replace(/\/$/, '');
+      if (workerUrlToUse && 'serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            setNotifStatusMsg("Wysyłam test przez serwer chmury...");
+            const res = await fetch(`${workerUrlToUse}/test`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ subscription: sub })
+            });
+            if (res.ok) {
+              setNotifStatusMsg("Powiadomienie z chmury wysłane pomyślnie! 🚀");
+              return;
+            } else {
+              setNotifStatusMsg(`Błąd chmury: ${res.status}`);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("Błąd testu chmury:", e);
+        }
+      }
+      setNotifStatusMsg("Wysłano test powiadomienia! 🔔");
+    } else {
+      alert("Brak uprawnień do powiadomień!");
+    }
+  };
 
   useEffect(() => {
     async function fetchGifs() {
@@ -488,7 +731,16 @@ function App() {
   };
 
   const exportData = () => {
-    const exportObj = { data, blisters, currentStreak, lastStreakDate };
+    const exportObj = { 
+      data, 
+      blisters, 
+      currentStreak, 
+      lastStreakDate,
+      notifEnabled,
+      notifTime,
+      notifWorkerUrl,
+      notifVapidKey
+    };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
@@ -509,6 +761,10 @@ function App() {
           if (parsed.blisters) { setBlisters(parsed.blisters); lss(BLISTERS_KEY, parsed.blisters); }
           if (parsed.currentStreak !== undefined) { setCurrentStreak(parsed.currentStreak); lss(STREAK_KEY, parsed.currentStreak); }
           if (parsed.lastStreakDate !== undefined) { setLastStreakDate(parsed.lastStreakDate); lss(LAST_STREAK_DATE_KEY, parsed.lastStreakDate); }
+          if (parsed.notifEnabled !== undefined) { setNotifEnabled(parsed.notifEnabled); lss(NOTIF_ENABLED_KEY, parsed.notifEnabled); }
+          if (parsed.notifTime !== undefined) { setNotifTime(parsed.notifTime); lss(NOTIF_TIME_KEY, parsed.notifTime); }
+          if (parsed.notifWorkerUrl !== undefined) { setNotifWorkerUrl(parsed.notifWorkerUrl); lss(NOTIF_WORKER_URL_KEY, parsed.notifWorkerUrl); }
+          if (parsed.notifVapidKey !== undefined) { setNotifVapidKey(parsed.notifVapidKey); lss(NOTIF_VAPID_KEY, parsed.notifVapidKey); }
           alert("Dane zaimportowane pomyślnie!");
         } catch (err) {
           alert("Błąd podczas importu pliku!");
@@ -841,6 +1097,177 @@ function App() {
                 style={{background:C.pale, border:"none", borderRadius:14, padding:"10px 16px", color:C.crimson, fontWeight:800, cursor:"pointer", fontSize:13}}>
                 Zmień
               </button>
+            </div>
+          </div>
+
+          <div style={{background:"rgba(255,255,255,0.85)", backdropFilter:"blur(16px)", borderRadius:26, padding:"20px", border:"1px solid rgba(255,255,255,0.8)", boxShadow:"0 6px 24px rgba(122,46,64,.06)"}}>
+            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+              <div style={{fontSize:12, fontWeight:800, color:C.blush, letterSpacing:1.5, textTransform:"uppercase"}}>
+                🔔 Powiadomienia
+              </div>
+              <button 
+                onClick={handleToggleNotif}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 14,
+                  border: "none",
+                  background: notifEnabled ? "#27ae60" : C.pale,
+                  color: notifEnabled ? "white" : C.dark,
+                  fontWeight: 800,
+                  fontSize: 12,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                {notifEnabled ? "Włączone ✓" : "Wyłączone ✕"}
+              </button>
+            </div>
+
+            <div style={{fontSize:13, color:C.dark, opacity:0.7, marginBottom:16}}>
+              Codzienne przypomnienie o zażyciu tabletki o ustalonej godzinie.
+            </div>
+
+            <div style={{display:"flex", flexDirection:"column", gap:12}}>
+              <div>
+                <div style={{fontSize:11, fontWeight:800, color:C.dark, opacity:0.7, marginBottom:6, letterSpacing:0.8}}>
+                  GODZINA POWIADOMIENIA
+                </div>
+                <input 
+                  type="time" 
+                  value={notifTime} 
+                  onChange={handleTimeChange}
+                  style={{
+                    width: "100%",
+                    fontSize: "20px",
+                    fontWeight: "800",
+                    color: C.crimson,
+                    textAlign: "center",
+                    padding: "12px 16px",
+                    borderRadius: "16px",
+                    background: "#FFF0F5",
+                    border: `1px solid ${C.blush}`
+                  }}
+                />
+              </div>
+
+              <div style={{display:"flex", gap:10}}>
+                <button 
+                  onClick={testNotification}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: 16,
+                    border: "none",
+                    background: C.pale,
+                    color: C.crimson,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    fontSize: 13
+                  }}
+                >
+                  🔔 Wyślij test
+                </button>
+                <button 
+                  onClick={()=>setNotifConfigOpen(!notifConfigOpen)}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: 16,
+                    border: "none",
+                    background: C.pale,
+                    color: C.dark,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    fontSize: 13
+                  }}
+                  title="Konfiguracja Cloudflare"
+                >
+                  ☁️ {notifConfigOpen ? "Zwiń" : "Chmura"}
+                </button>
+              </div>
+
+              {notifStatusMsg && (
+                <div style={{fontSize:12, fontWeight:700, color:C.crimson, textAlign:"center", marginTop:2}}>
+                  {notifStatusMsg}
+                </div>
+              )}
+
+              {notifConfigOpen && (
+                <div style={{
+                  background: "#FFF5F8",
+                  padding: "14px",
+                  borderRadius: "16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  border: `1px dashed ${C.blush}`
+                }}>
+                  <div style={{fontSize:11, fontWeight:800, color:C.dark, opacity:0.8}}>
+                    🌐 ADRES WORKERA (CLOUDFLARE)
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="https://twoj-worker.workers.dev"
+                    value={notifWorkerUrl}
+                    onChange={e => {
+                      setNotifWorkerUrl(e.target.value);
+                      lss(NOTIF_WORKER_URL_KEY, e.target.value);
+                    }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "white",
+                      border: "1px solid rgba(0,0,0,0.1)",
+                      color: C.text,
+                      width: "100%"
+                    }}
+                  />
+
+                  <div style={{fontSize:11, fontWeight:800, color:C.dark, opacity:0.8}}>
+                    🔑 KLUCZ PUBLICZNY VAPID (OPCJONALNY)
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Wklej klucz publiczny VAPID..."
+                    value={notifVapidKey}
+                    onChange={e => {
+                      setNotifVapidKey(e.target.value);
+                      lss(NOTIF_VAPID_KEY, e.target.value);
+                    }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "white",
+                      border: "1px solid rgba(0,0,0,0.1)",
+                      color: C.text,
+                      width: "100%"
+                    }}
+                  />
+
+                  <button
+                    onClick={() => syncPushSubscription(notifEnabled, notifTime, notifWorkerUrl, notifVapidKey)}
+                    style={{
+                      padding: "10px",
+                      borderRadius: 12,
+                      border: "none",
+                      background: C.crimson,
+                      color: "white",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      fontSize: 13
+                    }}
+                  >
+                    Zapisz i zsynchronizuj z chmurą 🔄
+                  </button>
+
+                  <div style={{fontSize:11, color:C.dark, opacity:0.6, lineHeight:1.4}}>
+                    💡 Dzięki Cloudflare Worker powiadomienia mogą przychodzić nawet przy wyłączonej aplikacji. Na iPhone upewnij się, że Trackapp jest dodany do Ekranu Początkowego (iOS 16.4+).
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

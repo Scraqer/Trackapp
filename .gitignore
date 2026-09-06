@@ -1,0 +1,16 @@
+# Cloudflare Wrangler - pliki lokalne, nie wgrywaj na GitHub
+.wrangler/
+.dev.vars
+
+# Zmienna środowiskowa z kluczem prywatnym (gdybyś kiedyś używał pliku .env)
+.env
+.env.local
+*.env
+
+# Node
+node_modules/
+
+# System
+.DS_Store
+Thumbs.db
+

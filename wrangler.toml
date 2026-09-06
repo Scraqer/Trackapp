@@ -1,0 +1,30 @@
+name = "trackapp-worker"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+preview_urls = false
+
+# ✅ URL Twojego Workera: https://trackapp-worker.domgwizdz.workers.dev
+
+# ✅ Cron Trigger - Worker sprawdza co minutę czy wysłać powiadomienie
+[triggers]
+crons = ["* * * * *"]
+
+# ✅ KV Namespace - baza danych subskrypcji
+# ID z Twojego terminala (wrangler kv:namespace create "SUBSCRIPTIONS")
+[[kv_namespaces]]
+binding = "SUBSCRIPTIONS"
+id = "9629defea39545d08418f9ee217f6653"
+
+# ============================================================================
+# 🔒 VAPID_PRIVATE_KEY - dodaj jako Secret, NIE tutaj!
+#
+# Uruchom w terminalu:
+#   npx wrangler secret put VAPID_PRIVATE_KEY
+#   (wklej swój Private Key i zatwierdź Enterem)
+#
+# LUB przez panel Cloudflare:
+#   Workers → trackapp-worker → Settings → Variables → Secret Variables
+#   → Add variable → Name: VAPID_PRIVATE_KEY → Value: [twój Private Key]
+# ============================================================================
+

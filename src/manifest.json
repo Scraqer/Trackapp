@@ -1,0 +1,23 @@
+{
+  "name": "Trackapp - Tracker tabletek",
+  "short_name": "Trackapp",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFE3EC",
+  "theme_color": "#C81D3A",
+  "description": "Twoje codzienne przypomnienie o zdrowiu.",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
