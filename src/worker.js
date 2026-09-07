@@ -6,7 +6,7 @@
 // i wpisz je DOKŁADNIE w poniższych linijkach:
 
 const VAPID_PUBLIC_KEY  = "BMSZje0Fq3PYVAtpCrOttQVRrkGcMS3Zf9jwIZ_4qn7xSmQ37VSfqcBGOrJA04deQtV0wLSyOijpOKt4F2KYQtU";    // <-- LINIA 8: KLUCZ PUBLICZNY VAPID
-const VAPID_SUBJECT     = "domgwizdz@gmail.com"; // <-- LINIA 10: TWÓJ EMAIL LUB ADRES WWW
+const VAPID_SUBJECT     = "mailto:domgwizdz@gmail.com"; // <-- LINIA 10: TWÓJ EMAIL LUB ADRES WWW
 
 // ============================================================================
 
@@ -143,10 +143,13 @@ export default {
                 body: "Pamiętaj o wzięciu tabletki! 💕"
               }, { pubKey, privKey, subject });
 
-              // Jeśli endpoint wygasł lub subskrypcja została anulowana (404 lub 410 Gone)
+               // Jeśli endpoint wygasł lub subskrypcja została anulowana (404 lub 410 Gone)
               if (res.status === 404 || res.status === 410) {
                 await env.SUBSCRIPTIONS.delete(key.name);
+              } else if (!res.ok) {
+                console.error(`Push nie powiódł się dla ${key.name}: status ${res.status}`);
               }
+              
             } catch (err) {
               console.error("Błąd wysyłki powiadomienia:", err);
             }

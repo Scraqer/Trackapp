@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Trackapp"/>
 <meta name="theme-color" content="#FFE3EC"/>
 
-<link rel="apple-touch-icon" href="https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png"/>
+<link rel="apple-touch-icon" href="https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png"/>
 
 <meta name="mobile-web-app-capable" content="yes"/>
 <title>Trackapp</title>
@@ -49,7 +49,7 @@ input[type=date], input[type=number], input[type=time] {
 </style>
 <script>
 (function(){
-  var iconUrl = 'https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png';
+  var iconUrl = 'https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png';
   var m = {
     name:'Trackapp',
     short_name:'Trackapp',
@@ -99,7 +99,7 @@ const NOTIF_VAPID_KEY   = "trackapp-notif-vapid-v1";
 // 🔔 KONFIGURACJA CHMURY POWIADOMIEŃ:
 // ============================================================================
 const DEFAULT_NOTIF_WORKER_URL       = "https://trackapp-worker.domgwizdz.workers.dev"; // URL Workera (✅ bezpieczny w kodzie)
-const DEFAULT_NOTIF_VAPID_PUBLIC_KEY = ""; // <-- LINIA 102: Wklej tu swój Public Key VAPID (✅ bezpieczny w kodzie)
+const DEFAULT_NOTIF_VAPID_PUBLIC_KEY = "BMSZje0Fq3PYVAtpCrOttQVRrkGcMS3Zf9jwIZ_4qn7xSmQ37VSfqcBGOrJA04deQtV0wLSyOijpOKt4F2KYQtU"; // <-- LINIA 102: Wklej tu swój Public Key VAPID (✅ bezpieczny w kodzie)
 // ============================================================================
  
 const MONTHS = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec",
@@ -325,7 +325,7 @@ function App() {
                 navigator.serviceWorker.ready.then(reg => {
                   reg.showNotification("Trackapp 💊", {
                     body: "Pamiętaj o wzięciu tabletki! 💕",
-                    icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+                    icon: "https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png",
                     tag: "trackapp-pill-reminder",
                     renotify: true
                   });
@@ -333,7 +333,7 @@ function App() {
               } else {
                 new Notification("Trackapp 💊", {
                   body: "Pamiętaj o wzięciu tabletki! 💕",
-                  icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png"
+                  icon: "https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png"
                 });
               }
             } catch (e) {
@@ -397,15 +397,15 @@ function App() {
         const reg = await navigator.serviceWorker.ready;
         reg.showNotification("Trackapp 💊", {
           body: `Lokalny test powiadomienia! Zaplanowano na godz. ${notifTime}.`,
-          icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
-          badge: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png",
+          icon: "https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png",
+          badge: "https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png",
           vibrate: [200, 100, 200],
           tag: "trackapp-test"
         });
       } else {
         new Notification("Trackapp 💊", {
           body: `Lokalny test powiadomienia! Zaplanowano na godz. ${notifTime}.`,
-          icon: "https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png"
+          icon: "https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png"
         });
       }
 
