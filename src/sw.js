@@ -11,8 +11,8 @@ self.addEventListener('push', function(event) {
 
   const options = {
     body: data.body || 'Pamiętaj o wzięciu tabletki! 💕',
-    icon: 'https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png',
-    badge: 'https://cdn.jsdelivr.net/gh/TWOJ-USER/TWOJE-REPO@main/icons/icon.png',
+    icon: 'https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png',
+    badge: 'https://cdn.jsdelivr.net/gh/Scraqer/Trackapp@main/icons/icon.png',
     vibrate: [200, 100, 200],
     tag: 'trackapp-pill-reminder',
     renotify: true,
@@ -25,8 +25,10 @@ self.addEventListener('push', function(event) {
     ]
   };
 
+  // Kluczowe dla iOS: event.waitUntil trzyma proces przy życiu, 
+  // dopóki powiadomienie faktycznie się nie wyświetli.
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Trackapp 💊', options)
+    self.registration.showNotification(data.title, options)
   );
 });
 
