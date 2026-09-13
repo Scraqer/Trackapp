@@ -46,6 +46,13 @@ input[type=date], input[type=number], input[type=time] {
   background: #FFF0F5; color: #3d1520; width: 100%;
   outline: none; -webkit-appearance: none; appearance: none;
 }
+
+@media (max-width: 380px) {
+  input[type=date], input[type=number], input[type=time] {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+}
 </style>
 <script>
 (function(){
@@ -876,8 +883,10 @@ function App() {
         backgroundPosition:"center",
         backgroundRepeat:"repeat",
         minHeight:"100vh",
-        maxWidth:430,margin:"0 auto",position:"relative",userSelect:"none",
-        paddingTop:"calc(12px + env(safe-area-inset-top))"}}
+        maxWidth:"100%",width:"100%",margin:"0 auto",position:"relative",userSelect:"none",
+        paddingTop:"calc(12px + env(safe-area-inset-top))",
+        paddingLeft:"env(safe-area-inset-left)",
+        paddingRight:"env(safe-area-inset-right)"}}
       onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
       onTouchEnd={e=>{
         if(touchX.current===null)return;
@@ -892,7 +901,7 @@ function App() {
         backdropFilter: "blur(16px)",
         borderRadius: "24px",
         padding: "5px",
-        margin: "0 16px 16px",
+        margin: "0 clamp(10px, 2vw, 16px) clamp(10px, 2vw, 16px)",
         boxShadow: "0 8px 32px rgba(122, 46, 64, 0.08)",
         border: "1px solid rgba(255, 255, 255, 0.8)"
       }}>
@@ -900,13 +909,13 @@ function App() {
           onClick={() => setActiveTab("main")}
           style={{
             flex: 1,
-            padding: "10px 0",
+            padding: "clamp(8px, 2vw, 10px) 0",
             borderRadius: "18px",
             border: "none",
             background: activeTab === "main" ? C.crimson : "transparent",
             color: activeTab === "main" ? "white" : C.text,
             fontWeight: 800,
-            fontSize: "14px",
+            fontSize: "clamp(12px, 2.5vw, 14px)",
             cursor: "pointer",
             transition: "all 0.22s cubic-bezier(0.34, 1.2, 0.64, 1)",
             display: "flex",
@@ -922,13 +931,13 @@ function App() {
           onClick={() => setActiveTab("settings")}
           style={{
             flex: 1,
-            padding: "10px 0",
+            padding: "clamp(8px, 2vw, 10px) 0",
             borderRadius: "18px",
             border: "none",
             background: activeTab === "settings" ? C.crimson : "transparent",
             color: activeTab === "settings" ? "white" : C.text,
             fontWeight: 800,
-            fontSize: "14px",
+            fontSize: "clamp(12px, 2.5vw, 14px)",
             cursor: "pointer",
             transition: "all 0.22s cubic-bezier(0.34, 1.2, 0.64, 1)",
             display: "flex",
@@ -958,9 +967,9 @@ function App() {
       )}
  
       {activeTab === "main" && (
-        <div style={{paddingBottom: 260}}>
+        <div style={{paddingBottom: "max(120px, 20vw)"}}>
           <div style={{display:"flex",alignItems:"center",
-            justifyContent:"space-between",padding:"0 20px 16px"}}>
+            justifyContent:"space-between",padding:"0 clamp(12px, 3vw, 20px) clamp(12px, 3vw, 16px)"}}>
             <button className="nav-btn" onClick={()=>goMonth(-1)}
               style={{width:42,height:42,borderRadius:"50%",background:"rgba(255, 255, 255, 0.85)",
                 backdropFilter:"blur(10px)", border:"1px solid rgba(255, 255, 255, 0.9)",
@@ -968,9 +977,9 @@ function App() {
                 alignItems:"center",justifyContent:"center",
                 boxShadow:"0 4px 16px rgba(122, 46, 64, 0.08)"}}>‹</button>
             <div style={{textAlign:"center"}}>
-              <div style={{fontSize:26,fontWeight:900,color:C.crimson,letterSpacing:-0.5}}>{MONTHS[mo]}</div>
+              <div style={{fontSize:"clamp(20px, 7vw, 26px)",fontWeight:900,color:C.crimson,letterSpacing:-0.5}}>{MONTHS[mo]}</div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:2}}>
-                <span style={{fontSize:13,fontWeight:700,color:C.dark,opacity:.55}}>{yr}</span>
+                <span style={{fontSize:"clamp(11px, 3vw, 13px)",fontWeight:700,color:C.dark,opacity:.55}}>{yr}</span>
                 {!isCurMo&&(
                   <button onClick={goToday}
                     style={{fontSize:11,fontWeight:800,color:C.crimson,background:"rgba(255,255,255,0.9)",
@@ -987,9 +996,9 @@ function App() {
                 boxShadow:"0 4px 16px rgba(122, 46, 64, 0.08)"}}>›</button>
           </div>
      
-          <div style={{margin:"0 14px",background:"rgba(255, 255, 255, 0.88)",
+          <div style={{margin:"0 clamp(8px, 2vw, 14px)",background:"rgba(255, 255, 255, 0.88)",
             backdropFilter:"blur(20px)",
-            borderRadius:28, padding:"20px 8px 24px",
+            borderRadius:28, padding:"clamp(16px, 4vw, 24px) clamp(6px, 1.5vw, 8px)",
             border:"1px solid rgba(255,255,255,0.9)",
             boxShadow:"0 10px 36px rgba(122, 46, 64, 0.09)"}}>
      
@@ -1051,10 +1060,10 @@ function App() {
           {currentBlister && (()=>{
             const p = pct(currentBlister);
             return (
-              <div style={{margin:"14px 14px 0",background:"rgba(255,255,255,0.85)",
+              <div style={{margin:"clamp(8px, 2vw, 14px) clamp(8px, 2vw, 14px) 0",background:"rgba(255,255,255,0.85)",
                 backdropFilter:"blur(16px)", borderRadius:24,
                 border:"1px solid rgba(255,255,255,0.8)",
-                padding:"16px 20px",boxShadow:"0 6px 24px rgba(122,46,64,.06)"}}>
+                padding:"clamp(12px, 3vw, 20px) clamp(14px, 3vw, 20px)",boxShadow:"0 6px 24px rgba(122,46,64,.06)"}}>
                 <div style={{fontSize:10,fontWeight:800,color:C.blush,letterSpacing:1.6,
                   marginBottom:8,textTransform:"uppercase"}}>Obecny Blister</div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -1098,32 +1107,32 @@ function App() {
           {/* ── FABs ────────────────────────────────────────────────────────── */}
           {!sheetBlisterOpen && !pickMode && (
             <button className="fab" onClick={()=>{setBMode("menu");setSheetBlisterOpen(true);}}
-              style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
-                background:C.coral,border:"none",borderRadius:28,padding:"16px 34px",
-                color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+              style={{position:"fixed",bottom:"clamp(16px, 4vw, 24px)",left:"50%",transform:"translateX(-50%)",
+                background:C.coral,border:"none",borderRadius:28,padding:"clamp(12px, 2vw, 16px) clamp(20px, 5vw, 34px)",
+                color:"white",fontSize:"clamp(13px, 2vw, 15px)",fontWeight:800,cursor:"pointer",
                 boxShadow:"0 8px 28px rgba(255,92,138,.42)",display:"flex",
                 alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
-              <span style={{fontSize:20,lineHeight:1}}>💊</span> Blister
+              <span style={{fontSize:"clamp(18px, 5vw, 20px)",lineHeight:1}}>💊</span> Blister
             </button>
           )}
           {!sheetStatsOpen && !pickMode && (
             <button className="fab" onClick={()=>setSheetStatsOpen(true)}
-              style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",
-                background:"#8B008B",border:"none",borderRadius:28,padding:"16px 34px",
-                color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+              style={{position:"fixed",bottom:"clamp(80px, 22vw, 88px)",left:"50%",transform:"translateX(-50%)",
+                background:"#8B008B",border:"none",borderRadius:28,padding:"clamp(12px, 2vw, 16px) clamp(20px, 5vw, 34px)",
+                color:"white",fontSize:"clamp(13px, 2vw, 15px)",fontWeight:800,cursor:"pointer",
                 boxShadow:"0 8px 28px rgba(139,0,139,.42)",display:"flex",
                 alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
-              <span style={{fontSize:20,lineHeight:1}}>📊</span> Statystyki
+              <span style={{fontSize:"clamp(18px, 5vw, 20px)",lineHeight:1}}>📊</span> Statystyki
             </button>
           )}
           {!sheetDayOpen && !pickMode && (
             <button className="fab" onClick={()=>{setSelDate(todayKey);setSheetDayOpen(true);}}
-              style={{position:"fixed",bottom:24,left:"85%",transform:"translateX(-50%)",
-                background:C.crimson,border:"none",borderRadius:28,padding:"16px 34px",
-                color:"white",fontSize:15,fontWeight:800,cursor:"pointer",
+              style={{position:"fixed",bottom:"clamp(16px, 4vw, 24px)",left:"85%",transform:"translateX(-50%)",
+                background:C.crimson,border:"none",borderRadius:28,padding:"clamp(12px, 2vw, 16px) clamp(20px, 5vw, 34px)",
+                color:"white",fontSize:"clamp(13px, 2vw, 15px)",fontWeight:800,cursor:"pointer",
                 boxShadow:"0 8px 28px rgba(200,29,58,.42)",display:"flex",
                 alignItems:"center",gap:10,zIndex:5,whiteSpace:"nowrap"}}>
-              <span style={{fontSize:20,lineHeight:1}}>+</span>
+              <span style={{fontSize:"clamp(18px, 5vw, 20px)",lineHeight:1}}>+</span>
             </button>
           )}
 
