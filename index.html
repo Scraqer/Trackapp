@@ -116,20 +116,18 @@ const C = {
  
 const BAND = ["rgba(255,255,255,0.18)","rgba(255,159,181,0.18)","rgba(200,216,255,0.18)","rgba(200,240,224,0.18)"];
 
+const GIFS_JSON_URL = "./gifs.json"; // <- musi leżeć obok index.html (ten sam katalog / hosting)
+
+// Awaryjne, minimalne fallbacki gdyby fetch gifs.json się nie powiódł
+// (np. brak internetu przy pierwszym uruchomieniu, zanim SW scache'uje plik).
 const DEFAULT_GIF_HAPPY = [
-  "https://media1.tenor.com/m/WsWej1C3ePYAAAAC/yippee-cat-kitty.gif",
-  "https://media1.tenor.com/m/9Nr32cJWZ8oAAAAC/catto.gif",
-  "https://media1.tenor.com/m/lfDATg4Bhc0AAAAC/happy-cat.gif",
-  "https://media1.tenor.com/m/HKb7CYTOH_8AAAAd/heh-cat.gif",
-  "https://media1.tenor.com/m/bYy3I8jdvfEAAAAC/weiner-dog-smile.gif",
-  "https://media.tenor.com/sbfBfp3FeY8AAAAi/oia-uia.gif"
-]; 
+  "https://media.giphy.com/media/W8hVGGjOjV82Rh6Oyi/giphy.gif",
+  "https://media.giphy.com/media/1Ju5mGZlWAqek/giphy.gif",
+  "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
+];
 const DEFAULT_GIF_SAD = [
-  "https://media1.tenor.com/m/-Wuv0jd3s40AAAAd/spearhyunho.gif",
-  "https://media1.tenor.com/m/tuzl1hVGlIQAAAAC/sad-cat-sad-cat-meme.gif",
-  "https://media1.tenor.com/m/t9PLz06a24wAAAAC/sad-cat.gif",
-  "https://media.tenor.com/u4mpua8vD3IAAAAi/%C3%BCzg%C3%BCnkedikuzeyefe.gif",
-  "https://media.tenor.com/-2rbVbnfW24AAAAi/crying-cat-sad-kitty.gif"
+  "https://media.giphy.com/media/LdMWg0xQTfmcpFF5Yt/giphy.gif",
+  "https://media.giphy.com/media/12G1D7rPEV5Cfu/giphy.gif"
 ];
 const Messages = ["Świetnie kochanie💕💕💕💕","Kocham cie❤️❤️❤️❤️","Jestem dumny!💖💖💖💖","Wyśle ci bicepsy💪💪","Świetna robota kochanie!😘 😘 😘 😘"];
  
@@ -204,6 +202,23 @@ function App() {
   const [happyGifs, setHappyGifs] = useState(DEFAULT_GIF_HAPPY);
   const [sadGifs, setSadGifs]     = useState(DEFAULT_GIF_SAD);
   const [activeGif, setActiveGif] = useState("");
+
+  // Dociągamy pełną listę gifów z gifs.json (zamiast trzymać ją na sztywno w kodzie).
+  // Jeśli fetch się nie powiedzie (np. plik nie leży obok, brak sieci), zostają fallbacki wyżej.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(GIFS_JSON_URL)
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(data => {
+        if (cancelled) return;
+        if (Array.isArray(data.happy) && data.happy.length) setHappyGifs(data.happy);
+        if (Array.isArray(data.sad) && data.sad.length) setSadGifs(data.sad);
+      })
+      .catch(err => {
+        console.warn("Nie udało się wczytać gifs.json, zostaję przy domyślnych gifach:", err);
+      });
+    return () => { cancelled = true; };
+  }, []);
  
   const [notifEnabled,   setNotifEnabled]   = useState(() => ls(NOTIF_ENABLED_KEY, false));
   const [notifTime,      setNotifTime]      = useState(() => ls(NOTIF_TIME_KEY, "20:00"));

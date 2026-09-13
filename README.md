@@ -43,4 +43,4 @@ Messages and gifs shown on streaks are meant to be personal, so they're not hard
 
 ## License
 
-Open source, do whatever you want with it. I'm not translating this into other languages — if you want it in yours, that's a PR waiting to happen. 🙂
+Open source, do whatever you want with it. I'm not translating this into other languages and if you have any questions dm me
