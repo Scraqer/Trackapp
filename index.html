@@ -94,6 +94,7 @@ const NOTIF_ENABLED_KEY = "trackapp-notif-enabled-v1";
 const NOTIF_TIME_KEY    = "trackapp-notif-time-v1";
 const NOTIF_WORKER_URL_KEY = "trackapp-notif-worker-url-v1";
 const NOTIF_VAPID_KEY   = "trackapp-notif-vapid-v1";
+const MESSAGES_KEY      = "trackapp-messages-v1";
 
 // ============================================================================
 // 🔔 KONFIGURACJA CHMURY POWIADOMIEŃ:
@@ -122,14 +123,15 @@ const GIFS_JSON_URL = "./gifs.json"; // <- musi leżeć obok index.html (ten sam
 // (np. brak internetu przy pierwszym uruchomieniu, zanim SW scache'uje plik).
 const DEFAULT_GIF_HAPPY = [
   "https://media.giphy.com/media/W8hVGGjOjV82Rh6Oyi/giphy.gif",
-  "https://media.giphy.com/media/1Ju5mGZlWAqek/giphy.gif",
   "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
 ];
 const DEFAULT_GIF_SAD = [
   "https://media.giphy.com/media/LdMWg0xQTfmcpFF5Yt/giphy.gif",
   "https://media.giphy.com/media/12G1D7rPEV5Cfu/giphy.gif"
 ];
-const Messages = ["Świetnie kochanie💕💕💕💕","Kocham cie❤️❤️❤️❤️","Jestem dumny!💖💖💖💖","Wyśle ci bicepsy💪💪","Świetna robota kochanie!😘 😘 😘 😘"];
+// Domyślne wiadomości pod streakiem — można je nadpisać przez Ustawienia -> Wiadomości (plik JSON).
+const DEFAULT_MESSAGES_HAPPY = ["Dobra robota! 💖"];
+const DEFAULT_MESSAGES_SAD = ["Zdarza się! 💔"];
  
 const ls  = (k,d) => { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):d; } catch{return d;} };
 const lss = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
@@ -227,6 +229,14 @@ function App() {
   const [notifPermission,setNotifPermission]= useState(() => typeof Notification !== "undefined" ? Notification.permission : "unsupported");
   const [notifStatusMsg, setNotifStatusMsg] = useState("");
   const [notifConfigOpen,setNotifConfigOpen] = useState(false);
+
+  const [messages, setMessages] = useState(() => {
+    const stored = ls(MESSAGES_KEY, null);
+    const happy = Array.isArray(stored?.happy) && stored.happy.length ? stored.happy : DEFAULT_MESSAGES_HAPPY;
+    const sad   = Array.isArray(stored?.sad)   && stored.sad.length   ? stored.sad   : DEFAULT_MESSAGES_SAD;
+    return { happy, sad };
+  });
+  const [messagesStatusMsg, setMessagesStatusMsg] = useState("");
 
   const [pickMode, setPickMode] = useState(false);
   const touchX = useRef(null);
@@ -602,7 +612,7 @@ function App() {
  
   const pillsIn = b => {
     const end = bEnd(b);
-    return Object.entries(data).filter(([k,v]) => k>=b.start && k<=end && v.tabletka).length;
+    return Object.entries(data).filter(([k,v]) => k>=b.start && k<=end && (v.tabletka || v.pominieta)).length;
   };
   const pct = b => Math.min(100, Math.round(pillsIn(b) / b.days * 100));
  
@@ -616,6 +626,24 @@ function App() {
   };
  
   const currentBlister = blisters.length ? blisters[blisters.length-1] : null;
+
+  // Auto-remove completed blisters after 70 days
+  useEffect(() => {
+    const today = getLogicalDate();
+    const filtered = blisters.filter(b => {
+      const endDateStr = bEnd(b);
+      const endDateObj = new Date(endDateStr + "T00:00:00");
+      const daysSinceEnd = Math.floor((today - endDateObj) / (1000 * 60 * 60 * 24));
+      const isCompleted = pct(b) >= 100;
+      // Remove if completed and 70+ days old
+      return !(isCompleted && daysSinceEnd > 70);
+    });
+    
+    if (filtered.length !== blisters.length) {
+      setBlisters(filtered);
+      lss(BLISTERS_KEY, filtered);
+    }
+  }, [blisters, data]);
  
   const saveBlister = () => {
     const d = parseInt(formDays);
@@ -786,6 +814,40 @@ function App() {
         }
       };
     }
+  };
+
+  const importMessages = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const fileReader = new FileReader();
+    fileReader.readAsText(file, "UTF-8");
+    fileReader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target.result);
+        const happy = Array.isArray(parsed.happy) ? parsed.happy.filter(m => typeof m === "string" && m.trim()) : [];
+        const sad   = Array.isArray(parsed.sad)   ? parsed.sad.filter(m => typeof m === "string" && m.trim())   : [];
+        if (!happy.length && !sad.length) {
+          setMessagesStatusMsg("Plik nie zawiera poprawnych list \"happy\"/\"sad\".");
+          return;
+        }
+        const next = {
+          happy: happy.length ? happy : messages.happy,
+          sad:   sad.length   ? sad   : messages.sad
+        };
+        setMessages(next);
+        lss(MESSAGES_KEY, next);
+        setMessagesStatusMsg(`Wczytano ${happy.length} happy i ${sad.length} sad wiadomości ✓`);
+      } catch (err) {
+        setMessagesStatusMsg("Błąd podczas wczytywania pliku JSON!");
+      }
+    };
+    e.target.value = "";
+  };
+
+  const resetMessages = () => {
+    setMessages({ happy: DEFAULT_MESSAGES_HAPPY, sad: DEFAULT_MESSAGES_SAD });
+    lss(MESSAGES_KEY, { happy: DEFAULT_MESSAGES_HAPPY, sad: DEFAULT_MESSAGES_SAD });
+    setMessagesStatusMsg("Przywrócono domyślne wiadomości.");
   };
 
   const resetAllData = () => {
@@ -1113,6 +1175,36 @@ function App() {
                 Zmień
               </button>
             </div>
+          </div>
+
+          <div style={{background:"rgba(255,255,255,0.85)", backdropFilter:"blur(16px)", borderRadius:26, padding:"20px", border:"1px solid rgba(255,255,255,0.8)", boxShadow:"0 6px 24px rgba(122,46,64,.06)"}}>
+            <div style={{fontSize:12, fontWeight:800, color:C.blush, letterSpacing:1.5, textTransform:"uppercase", marginBottom:12}}>
+              💌 Wiadomości pod streakiem
+            </div>
+            <div style={{fontSize:13, color:C.dark, opacity:0.7, marginBottom:16}}>
+              Wgraj plik JSON z własnymi wiadomościami lub przywróć domyślne. Plik powinien zawierać obiekt z dwoma tablicami: "happy" i "sad".
+            </div>
+
+            <div style={{fontSize:12, fontWeight:700, color:C.dark, opacity:0.6, marginBottom:14}}>
+              Obecnie: {messages.happy.length} happy • {messages.sad.length} sad
+            </div>
+
+            <div style={{display:"flex", flexDirection:"column", gap:10}}>
+              <label style={{padding:"14px", borderRadius:18, border:`2px dashed ${C.coral}`, background:C.pale, color:C.crimson, fontWeight:800, cursor:"pointer", fontSize:14, textAlign:"center"}}>
+                📤 Wgraj plik JSON z wiadomościami
+               <input type="file" onChange={importMessages} style={{display:"none"}} />
+              </label>
+              <button onClick={resetMessages}
+                style={{padding:"12px", borderRadius:16, border:"none", background:C.pale, color:C.dark, fontWeight:800, cursor:"pointer", fontSize:13}}>
+                ↩️ Przywróć domyślne
+              </button>
+            </div>
+
+            {messagesStatusMsg && (
+              <div style={{fontSize:12, fontWeight:700, color:C.crimson, textAlign:"center", marginTop:12}}>
+                {messagesStatusMsg}
+              </div>
+            )}
           </div>
 
           <div style={{background:"rgba(255,255,255,0.85)", backdropFilter:"blur(16px)", borderRadius:26, padding:"20px", border:"1px solid rgba(255,255,255,0.8)", boxShadow:"0 6px 24px rgba(122,46,64,.06)"}}>
@@ -1497,8 +1589,8 @@ function App() {
         <div style={{fontSize:12,fontWeight:600,color:C.dark,opacity:.5,
           fontStyle:"italic",paddingTop:16,borderTop:`1px solid ${C.pale}`}}>
           {currentStreak > 0
-            ? Messages[Math.floor(Math.random() * Messages.length)]
-            : "MAMMA MIAAAAA! 😭😭😭😭😭😭😭😭😭"}
+            ? messages.happy[Math.floor(Math.random() * messages.happy.length)]
+            : messages.sad[Math.floor(Math.random() * messages.sad.length)]}
         </div>
       </div>
  
