@@ -19,9 +19,9 @@ A pill tracker PWA I built for my girlfriend. That's it, that's the app.
 - Cron trigger checking every minute if it's pill time
 - Web Push (VAPID) for actual notification delivery
 
-## Heads up: this was ~90% vibecoded
+## Heads up: this was made using ai
 
-I'm not a developer. I described what I wanted, an AI wrote most of the code, and I glued the rest together by asking a lot of "why is this broken" questions. If something looks weird or overengineered in here, that's probably why. It works though, which is the only bar I was trying to clear.
+I'm not a developer, im a beginner. If something looks weird or overengineered in here, that's probably why. It works though, which is the only bar I was trying to clear.
 
 ## iOS notifications are janky, not my fault (mostly)
 
