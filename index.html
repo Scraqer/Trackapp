@@ -35,6 +35,48 @@ body { min-height: 100.1vh; background: #FFE3EC; overscroll-behavior-x: none; }
 .list-item { transition: background .15s ease; }
 .list-item:active { background: #FFD6E8 url("https://i.pinimg.com/736x/93/99/97/9399972b389a56e287c561ee50941b07.jpg") !important; }
 
+.bleeding-range {
+  width: 100%;
+  height: 24px;
+  accent-color: #FF272A;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.bleeding-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #FFDDE3;
+}
+
+.bleeding-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #FF272A;
+  box-shadow: 0 4px 12px rgba(255,39,42,.28);
+}
+
+.bleeding-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #FFDDE3;
+}
+
+.bleeding-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: #FF272A;
+  box-shadow: 0 4px 12px rgba(255,39,42,.28);
+}
+
 @keyframes sR { from{opacity:0;transform:translateX(24px)} to{opacity:1;transform:translateX(0)} }
 @keyframes sL { from{opacity:0;transform:translateX(-24px)} to{opacity:1;transform:translateX(0)} }
 .anim-r { animation: sR .25s cubic-bezier(.22,1,.36,1) both; }
@@ -102,6 +144,7 @@ const NOTIF_TIME_KEY    = "trackapp-notif-time-v1";
 const NOTIF_WORKER_URL_KEY = "trackapp-notif-worker-url-v1";
 const NOTIF_VAPID_KEY   = "trackapp-notif-vapid-v1";
 const MESSAGES_KEY      = "trackapp-messages-v1";
+const LOST_STREAK_KEY   = "trackapp-lost-streak-v1";
 
 // ============================================================================
 // 🔔 KONFIGURACJA CHMURY POWIADOMIEŃ:
@@ -199,6 +242,11 @@ function App() {
   const [numpadValue,       setNumpadValue]       = useState("");
   const [secretMenuOpen,    setSecretMenuOpen]    = useState(false);
   const [secretStreakVal,   setSecretStreakVal]   = useState("");
+  const [restoreStreakOpen, setRestoreStreakOpen] = useState(false);
+  const [lostStreak,        setLostStreak]        = useState(() => {
+    const stored = ls(LOST_STREAK_KEY, 0);
+    return parseInt(stored) || 0;
+  });
   const [currentStreak,     setCurrentStreak]     = useState(() => {
     const stored = ls(STREAK_KEY, null);
     return stored || 0;
@@ -510,6 +558,8 @@ function App() {
       const storedStreak = ls(STREAK_KEY, 0);
       const storedLast   = ls(LAST_STREAK_DATE_KEY, null);
       if (storedStreak > 0 && (!storedLast || (storedLast !== tStr && storedLast !== yStr))) {
+        lss(LOST_STREAK_KEY, storedStreak);
+        setLostStreak(storedStreak);
         setCurrentStreak(0);
         lss(STREAK_KEY, 0);
         lss(LAST_STREAK_DATE_KEY, null);
@@ -537,6 +587,10 @@ function App() {
     } else if (field === "tabletka" && e.tabletka) {
       e.pominieta = false;
     }
+    if (field === "krwawienie" && !e.krwawienie) {
+      delete e.krwawieniePoziom;
+      delete e.krwawienieNotatki;
+    }
 
     const next = {...data};
     if (!e.tabletka && !e.freaky && !e.krwawienie && !e.pominieta) delete next[selDate];
@@ -548,6 +602,10 @@ function App() {
     const curTodayKey = fmtKey(curLogicalNow.getFullYear(), curLogicalNow.getMonth(), curLogicalNow.getDate());
 
     if (field === "pominieta" && e.pominieta && selDate === curTodayKey) {
+      if (currentStreak > 0) {
+        lss(LOST_STREAK_KEY, currentStreak);
+        setLostStreak(currentStreak);
+      }
       setCurrentStreak(0);
       lss(STREAK_KEY, 0);
       lss(LAST_STREAK_DATE_KEY, null);
@@ -582,6 +640,10 @@ function App() {
         const yest = new Date(curLogicalNow);
         yest.setDate(yest.getDate() - 1);
         const yesterdayKey = fmtKey(yest.getFullYear(), yest.getMonth(), yest.getDate());
+        if (newStreak === 0 && currentStreak > 0) {
+          lss(LOST_STREAK_KEY, currentStreak);
+          setLostStreak(currentStreak);
+        }
         setCurrentStreak(newStreak);
         lss(STREAK_KEY, newStreak);
         if (newStreak > 0) {
@@ -593,6 +655,20 @@ function App() {
         }
       }
     }
+  };
+
+  const setBleedingIntensity = level => {
+    const e = {...(data[selDate]||{}), krwawienie:true, krwawieniePoziom:level};
+    const next = {...data, [selDate]:e};
+    setData(next);
+    lss(STORAGE_KEY, next);
+  };
+
+  const setBleedingNotes = notes => {
+    const e = {...(data[selDate]||{}), krwawienie:true, krwawienieNotatki:notes};
+    const next = {...data, [selDate]:e};
+    setData(next);
+    lss(STORAGE_KEY, next);
   };
  
   const goMonth = dir => {
@@ -703,8 +779,12 @@ function App() {
       if (numpadValue === "2408") {
         setNumpadOpen(false);
         setNumpadValue("");
-        setSecretStreakVal("");
-        setSecretMenuOpen(true);
+        if (lostStreak > 0) {
+          setRestoreStreakOpen(true);
+        } else {
+          setSecretStreakVal("");
+          setSecretMenuOpen(true);
+        }
       } else {
         setNumpadValue("");
         setNumpadOpen(false);
@@ -714,8 +794,12 @@ function App() {
       if (next === "2408") {
         setNumpadOpen(false);
         setNumpadValue("");
-        setSecretStreakVal("");
-        setSecretMenuOpen(true);
+        if (lostStreak > 0) {
+          setRestoreStreakOpen(true);
+        } else {
+          setSecretStreakVal("");
+          setSecretMenuOpen(true);
+        }
       } else {
         setNumpadValue(next);
       }
@@ -725,6 +809,10 @@ function App() {
   const confirmSecretStreak = () => {
     const n = parseInt(secretStreakVal);
     if (!isNaN(n) && n >= 0) {
+      if (n === 0 && currentStreak > 0) {
+        lss(LOST_STREAK_KEY, currentStreak);
+        setLostStreak(currentStreak);
+      }
       setCurrentStreak(n);
       lss(STREAK_KEY, n);
       if (n > 0) {
@@ -737,6 +825,21 @@ function App() {
     }
     setSecretMenuOpen(false);
     setSecretStreakVal("");
+  };
+
+  const confirmRestoreStreak = () => {
+    if (lostStreak <= 0) {
+      setRestoreStreakOpen(false);
+      return;
+    }
+    const restoredStreak = currentStreak + lostStreak;
+    setCurrentStreak(restoredStreak);
+    lss(STREAK_KEY, restoredStreak);
+    lss(LAST_STREAK_DATE_KEY, todayKey);
+    setLastStreakDate(todayKey);
+    setLostStreak(0);
+    lss(LOST_STREAK_KEY, 0);
+    setRestoreStreakOpen(false);
   };
 
   const getMonthStats = (year, month) => {
@@ -786,6 +889,7 @@ function App() {
       blisters, 
       currentStreak, 
       lastStreakDate,
+      lostStreak,
       notifEnabled,
       notifTime,
       notifWorkerUrl,
@@ -811,6 +915,11 @@ function App() {
           if (parsed.blisters) { setBlisters(parsed.blisters); lss(BLISTERS_KEY, parsed.blisters); }
           if (parsed.currentStreak !== undefined) { setCurrentStreak(parsed.currentStreak); lss(STREAK_KEY, parsed.currentStreak); }
           if (parsed.lastStreakDate !== undefined) { setLastStreakDate(parsed.lastStreakDate); lss(LAST_STREAK_DATE_KEY, parsed.lastStreakDate); }
+          if (parsed.lostStreak !== undefined) {
+            const importedLostStreak = parseInt(parsed.lostStreak) || 0;
+            setLostStreak(importedLostStreak);
+            lss(LOST_STREAK_KEY, importedLostStreak);
+          }
           if (parsed.notifEnabled !== undefined) { setNotifEnabled(parsed.notifEnabled); lss(NOTIF_ENABLED_KEY, parsed.notifEnabled); }
           if (parsed.notifTime !== undefined) { setNotifTime(parsed.notifTime); lss(NOTIF_TIME_KEY, parsed.notifTime); }
           if (parsed.notifWorkerUrl !== undefined) { setNotifWorkerUrl(parsed.notifWorkerUrl); lss(NOTIF_WORKER_URL_KEY, parsed.notifWorkerUrl); }
@@ -864,6 +973,7 @@ function App() {
       setBlisters([]);
       setCurrentStreak(0);
       setLastStreakDate(null);
+      setLostStreak(0);
       alert("Aplikacja została zresetowana.");
     }
   };
@@ -1465,6 +1575,50 @@ function App() {
         </>
       )}
 
+      {restoreStreakOpen && (
+        <>
+          <div onClick={()=>setRestoreStreakOpen(false)}
+            style={{position:"fixed",inset:0,background:"rgba(122,46,64,.35)",
+              zIndex:29,backdropFilter:"blur(5px)"}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",
+            transform:"translate(-50%, -50%)",
+            background:"white",borderRadius:28,padding:"30px 24px",
+            zIndex:30,boxShadow:"0 20px 60px rgba(200,29,58,.3)",
+            width:290,maxWidth:"90vw",textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:2.5,
+              color:C.blush,textTransform:"uppercase",marginBottom:6}}>
+              Ostatni streak
+            </div>
+            <div style={{fontSize:20,fontWeight:900,color:C.crimson,marginBottom:10}}>
+              Przywróć streak
+            </div>
+            <div style={{fontSize:13,fontWeight:700,color:C.dark,opacity:.65,
+              lineHeight:1.5,marginBottom:18}}>
+              Obecnie masz {currentStreak} dni.<br/>
+              Możesz odzyskać {lostStreak} dni.
+            </div>
+            <div style={{background:C.pale,borderRadius:18,padding:"14px",
+              fontSize:26,fontWeight:900,color:C.crimson,marginBottom:18}}>
+              {currentStreak} + {lostStreak} = {currentStreak + lostStreak}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setRestoreStreakOpen(false)}
+                style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",
+                  background:C.pale,color:C.dark,fontWeight:700,fontSize:15,
+                  cursor:"pointer"}}>
+                Anuluj
+              </button>
+              <button onClick={confirmRestoreStreak}
+                style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",
+                  background:C.crimson,color:"white",fontWeight:800,fontSize:15,
+                  cursor:"pointer",boxShadow:"0 4px 14px rgba(200,29,58,.35)"}}>
+                Przywróć ✓
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {secretMenuOpen && (
         <>
           <div onClick={()=>setSecretMenuOpen(false)}
@@ -1611,7 +1765,8 @@ function App() {
         padding:"14px 22px 52px",zIndex:11,
         transition:"transform .38s cubic-bezier(.34,1.2,.64,1)",
         boxShadow:"0 -8px 48px rgba(200,29,58,.16)",
-        borderTop:"1px solid rgba(255,255,255,0.8)"}}>
+        borderTop:"1px solid rgba(255,255,255,0.8)",
+        maxHeight:"82vh",overflowY:"auto"}}>
         <div style={{width:40,height:4,borderRadius:2,background:C.pale,margin:"0 auto 22px"}}/>
         <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.8,
           marginBottom:18,textTransform:"uppercase"}}>{selLabel}</div>
@@ -1625,21 +1780,67 @@ function App() {
           ].map(item=>{
             const on = !!selData[item.field];
             return (
-              <button key={item.field} className="tog-btn" onClick={()=>toggle(item.field)}
-                style={{padding:"18px 22px",borderRadius:22,border:"none",cursor:"pointer",
-                  background:on?item.activeBg:C.pale,color:on?"white":C.crimson,
-                  fontSize:17,fontWeight:800,display:"flex",alignItems:"center",
-                  justifyContent:"space-between",
-                  boxShadow:on?`0 6px 20px ${item.sh}`:"none",
-                  transform:on?"scale(1.02)":"scale(1)"}}>
-                <span>{item.label}</span>
-                <div style={{width:32,height:32,borderRadius:"50%",
-                  background:on?"rgba(255,255,255,.25)":"rgba(200,29,58,.08)",
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:17,fontWeight:900,color:on?"white":C.crimson}}>
-                  {on?"✓":""}
-                </div>
-              </button>
+              <React.Fragment key={item.field}>
+                <button className="tog-btn" onClick={()=>toggle(item.field)}
+                  style={{padding:"18px 22px",borderRadius:22,border:"none",cursor:"pointer",
+                    background:on?item.activeBg:C.pale,color:on?"white":C.crimson,
+                    fontSize:17,fontWeight:800,display:"flex",alignItems:"center",
+                    justifyContent:"space-between",
+                    boxShadow:on?`0 6px 20px ${item.sh}`:"none",
+                    transform:on?"scale(1.02)":"scale(1)"}}>
+                  <span>{item.label}</span>
+                  <div style={{width:32,height:32,borderRadius:"50%",
+                    background:on?"rgba(255,255,255,.25)":"rgba(200,29,58,.08)",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:17,fontWeight:900,color:on?"white":C.crimson}}>
+                    {on?"✓":""}
+                  </div>
+                </button>
+                {item.field==="krwawienie" && on && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12,padding:"4px 2px 8px"}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.1,
+                        margin:"4px 0 8px",textTransform:"uppercase"}}>Intensywność</div>
+                      {(() => {
+                        const labels = ["Niewielkie","Małe","Średnie","Duże","Bardzo duże"];
+                        const level = selData.krwawieniePoziom || 3;
+                        return (
+                          <div style={{padding:"10px 12px 8px",borderRadius:18,background:"#FFF5F7"}}>
+                            <div style={{textAlign:"center",marginBottom:4,fontSize:14,fontWeight:900,color:C.crimson}}>
+                              {labels[level-1]}
+                            </div>
+                            <input
+                              className="bleeding-range"
+                              type="range"
+                              min="1"
+                              max="5"
+                              step="1"
+                              value={level}
+                              onChange={event=>setBleedingIntensity(parseInt(event.target.value))}
+                              aria-label="Intensywność krwawienia"/>
+                            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,fontWeight:800,color:C.dark,opacity:.65}}>
+                              <span>Niewielkie</span>
+                              <span>Bardzo duże</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:800,color:C.blush,letterSpacing:1.1,
+                        margin:"4px 0 8px",textTransform:"uppercase"}}>Notatki</div>
+                      <textarea
+                        value={selData.krwawienieNotatki||""}
+                        onChange={event=>setBleedingNotes(event.target.value)}
+                        placeholder="Dodaj notatkę..."
+                        maxLength={500}
+                        style={{width:"100%",minHeight:88,resize:"vertical",fontFamily:"Nunito, sans-serif",
+                          fontSize:14,fontWeight:700,padding:"12px 14px",border:"none",borderRadius:16,
+                          background:"#FFF0F5",color:C.text,outline:"none",lineHeight:1.4}}/>
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </div>
